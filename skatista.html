@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skate Neon</title>
+<link rel="stylesheet" href="comum.css">
+<style>
+/* VOICE: jogo de skate de fliperama, reflexo + matemática
+   IDEA: pista synthwave que é o gráfico de f; manobras só valem nos topos e vales (f′ = 0)
+   PICTURE: pôr do sol neon, cidade ao fundo, pista rosa brilhante, skatista em pixel art, medidor de f′ embaixo
+   COLOUR and TYPE: rosa e ciano neon sobre roxo; Press Start 2P nas manobras
+   LAYOUT: pista à esquerda, botão de manobra e placar à direita */
+:root{--cor:var(--pink)}
+.fig{min-height:520px}
+.manobra{width:100%;min-height:70px;font:16px var(--pixel)}
+#log{display:grid;gap:6px;margin-top:12px;font-size:15px}
+#log div{display:flex;justify-content:space-between;gap:8px;border-bottom:2px solid var(--line);padding-bottom:4px}
+.ok{color:var(--green);font-weight:700}.mal{color:var(--red);font-weight:700}
+</style>
+<script src="grafico.js"></script>
+<script src="tutoriais.js"></script>
+</head>
+<body>
+<div class="stripe"><i style="background:var(--pink)"></i><i style="background:var(--blue)"></i><i style="background:var(--yel)"></i></div>
+<nav class="topo"><a href="index.html">← Voltar ao fliperama</a><span class="marca">DERIVADAS</span></nav>
+<section class="band">
+  <h1>Skate Neon</h1>
+  <div class="como">
+    <div>O skatista desce sozinho pela pista, que é o <b>gráfico de f</b>.</div>
+    <div>Aperte <b>MANOBRA</b> (ou <span class="kbd">Espaço</span>) bem no <b>topo</b> ou no <b>fundo</b> de cada onda.</div>
+    <div>Nesses pontos a pista fica reta: <b>f′(x) = 0</b>. O medidor embaixo mostra f′ (só na pista 1).</div>
+  </div>
+  <div class="placar"><div><b id="pPista">1/4</b>pista</div><div><b id="pPts">0</b>pontos</div><div><b id="pCombo">0</b>combo</div></div>
+  <div class="palco">
+    <div>
+      <div class="fig"><canvas id="cv"></canvas></div>
+      <div class="leg"><span><i style="background:var(--pink)"></i>pista: f(x)</span><span><i style="background:var(--blue)"></i>medidor f′(x)</span><span><i class="b" style="background:var(--green)"></i>manobra certa</span><span><i class="b" style="background:var(--red)"></i>errou</span></div>
+    </div>
+    <aside class="panel" id="painel">
+      <h3 id="tit"></h3>
+      <p class="grande" id="fx" style="color:var(--pink)"></p>
+      <button class="pri" id="bIr">Começar pista</button>
+      <button class="pri manobra" id="bMan" disabled style="margin-top:12px">MANOBRA!</button>
+      <p class="small" style="margin-top:10px">PERFEITO (|f′| &lt; 0,12): +10 · BOM (&lt; 0,4): +6 · OK (&lt; 0,9): +2. Acertos seguidos aumentam o combo (+2 cada).</p>
+      <div id="log"></div>
+    </aside>
+  </div>
+</section>
+<script>
+{
+const $=id=>document.getElementById(id),F=G.fmt;
+const PISTAS=[
+  {ex:'f(x) = 2·sen(x)',f:x=>2*Math.sin(x),x0:0,x1:12.6,y:[-3.2,3.2],ver:true},
+  {ex:'f(x) = 0,1x³ − 1,2x',f:x=>.1*x**3-1.2*x,x0:-4.6,x1:4.6,y:[-3.5,3.5],ver:false},
+  {ex:'f(x) = sen(x) + 0,5·sen(2x)',f:x=>Math.sin(x)+.5*Math.sin(2*x),x0:0,x1:12.6,y:[-2.2,2.2],ver:false},
+  {ex:'f(x) = 1,5·cos(0,8x) + 0,3x',f:x=>1.5*Math.cos(.8*x)+.3*x,x0:0,x1:14,y:[-2,6],ver:false},
+];
+const MANOBRAS=['OLLIE','KICKFLIP','HEELFLIP','360 FLIP','GRIND','MANUAL','POP SHOVE-IT'];
+const SK=['...hh...','..hssh..','...ss...','.bbbbbb.','b.bbbb.b','..bbbb..','..p..p..','..p..p..','.pp..pp.'];
+const PALS={h:'#ffd23f',s:'#ffcf9e',b:'#39c2ff',p:'#9b5cff'};
+const d=(f,x)=>(f(x+1e-5)-f(x-1e-5))/2e-5;
+function extremos(P){const r=[];let xa=P.x0,da=d(P.f,xa);
+  for(let x=P.x0+.01;x<=P.x1;x+=.01){const dx=d(P.f,x);if(da*dx<0){let a=xa,b=x;for(let k=0;k<40;k++){const m=(a+b)/2;d(P.f,a)*d(P.f,m)<=0?b=m:a=m;}r.push({x:(a+b)/2,tipo:dx>0?'vale':'topo',feito:null});}xa=x;da=dx;}return r;}
+let pi=0,pts=0,combo=0,P=null,ext=[],xs=0,rodando=false,t0=0,dur=13,acabouPista=false,salto=0,giro=0,p=null;
+const s=G.tela($('cv'));
+function prepara(){P=PISTAS[pi];ext=extremos(P);xs=P.x0;rodando=false;acabouPista=false;
+  $('tit').textContent=`Pista ${pi+1} de ${PISTAS.length}${P.ver?' (medidor ligado)':' (medidor desligado)'}`;$('fx').textContent=P.ex;
+  $('log').innerHTML='';$('bIr').textContent='Começar pista';$('bIr').disabled=false;$('bMan').disabled=true;placar();}
+function placar(){$('pPista').textContent=`${pi+1}/${PISTAS.length}`;$('pPts').textContent=pts;$('pCombo').textContent='x'+combo;}
+function log(t,cl,v){$('log').insertAdjacentHTML('beforeend',`<div><span>${t}</span><span class="${cl}">${v}</span></div>`);}
+$('bIr').onclick=()=>{
+  if(acabouPista){if(pi<PISTAS.length-1){pi++;prepara();}else{const r=G.recorde('exatas-skatista',pts);G.fim($('painel'),{titulo:'Sessão encerrada!',valor:pts,detalhe:'pontos',rec:r});}return;}
+  rodando=true;t0=performance.now();$('bIr').disabled=true;$('bMan').disabled=false;$('bMan').focus();};
+function manobra(){
+  if(!rodando)return;salto=performance.now();
+  const alvo=ext.filter(e=>!e.feito).sort((a,b)=>Math.abs(a.x-xs)-Math.abs(b.x-xs))[0],df=d(P.f,xs),X=p?p.X(xs):0,Y=p?p.Y(P.f(xs))-60:0;
+  if(!alvo||Math.abs(alvo.x-xs)>.9){combo=0;placar();G.pop('CEDO DEMAIS',X,Y,'#ff4d6d');log(`x = ${F(xs,2)}: nenhum topo/vale perto`,'mal',`f′ = ${F(df,2)}`);return;}
+  const a=Math.abs(df),[nome,base]=a<.12?['PERFEITO',10]:a<.4?['BOM',6]:a<.9?['OK',2]:['ERROU',0];
+  if(base){combo++;giro=1;}else combo=0;const ganho=base?base+2*(combo-1):0;
+  alvo.feito={x:xs,ganho};pts+=ganho;placar();
+  if(base){const m=MANOBRAS[Math.floor(Math.random()*MANOBRAS.length)];G.pop(`${m}! +${ganho}`,X,Y,a<.12?'#39ff88':'#ffd23f');G.explode(X,Y+40,['#ff4fd8','#39c2ff','#ffd23f'],22,3);}
+  else G.pop('ERROU!',X,Y,'#ff4d6d');
+  log(`${alvo.tipo} em x ≈ ${F(alvo.x,2)}`,base?'ok':'mal',`f′ = ${F(df,2)} · ${nome} +${ganho}`);}
+$('bMan').onclick=manobra;addEventListener('keydown',e=>{if(e.key===' '){e.preventDefault();manobra();}});
+G.loop(now=>{
+  if(rodando){const k=(now-t0)/1000/dur;xs=P.x0+(P.x1-P.x0)*Math.min(1,k);
+    for(const e of ext)if(!e.feito&&xs>e.x+.9){e.feito={x:null,ganho:0};combo=0;placar();log(`${e.tipo} em x ≈ ${F(e.x,2)}`,'mal','passou direto · 0');if(p)G.pop('PASSOU!',p.X(e.x),p.Y(P.f(e.x))-30,'#ff4d6d');}
+    if(k>=1){rodando=false;acabouPista=true;$('bMan').disabled=true;$('bIr').disabled=false;$('bIr').textContent=pi<PISTAS.length-1?'Próxima pista':'Ver resultado';}}
+  desenha(now);});
+function desenha(now){
+  s.limpa();if(!s.W||!P)return;const c=s.ctx,W=s.W,H=s.H,mostrarD=P.ver||acabouPista;
+  // pôr do sol synthwave
+  const ceu=c.createLinearGradient(0,0,0,H*.6);ceu.addColorStop(0,'#14062e');ceu.addColorStop(.6,'#5a1663');ceu.addColorStop(1,'#ff6f61');c.fillStyle=ceu;c.fillRect(0,0,W,H);
+  const sx=W*.5,sy=H*(mostrarD?.42:.55),sr=Math.min(W,H)*.2;const sol=c.createLinearGradient(0,sy-sr,0,sy+sr);sol.addColorStop(0,'#ffd23f');sol.addColorStop(1,'#ff4fd8');
+  c.fillStyle=sol;c.beginPath();c.arc(sx,sy,sr,Math.PI,0);c.fill();c.fillStyle='#5a1663';for(let i=0;i<6;i++)c.fillRect(sx-sr,sy-sr*.12*(i+1)-i*2,sr*2,3+i*.6);
+  c.fillStyle='#0e0b24';for(let i=0;i<24;i++){const bw=W/24,bh=30+((i*53)%70);c.fillRect(i*bw,sy-bh+10,bw-3,bh);}
+  c.fillStyle='rgba(255,210,63,.6)';for(let i=0;i<40;i++){const bw=W/24,col=i%24,bh=30+((col*53)%70);if((i*7)%3)c.fillRect(col*bw+4+(i%3)*5,sy-bh+18+(i%4)*10,2,3);}
+  p=G.plano(s,{x0:P.x0,x1:P.x1,y0:P.y[0],y1:P.y[1]},{mB:mostrarD?H*.36:30,mL:40});
+  // pista: concreto embaixo da curva + borda neon
+  c.fillStyle='rgba(20,14,48,.92)';c.beginPath();c.moveTo(0,H);c.lineTo(0,p.Y(P.f(P.x0)));for(let px=p.X(P.x0);px<=p.X(P.x1);px+=3)c.lineTo(px,p.Y(P.f(p.xi(px))));c.lineTo(W,p.Y(P.f(P.x1)));c.lineTo(W,H);c.fill();
+  G.curva(p,P.f,'#ff4fd8',5,{brilho:16});
+  for(const e of ext)if(e.feito)G.ponto(c,p.X(e.x),p.Y(P.f(e.x)),7,e.feito.ganho?'#39ff88':'#ff4d6d','#000');
+  // skatista: prancha inclinada como a reta tangente; pula ao fazer manobra
+  const x1=xs-.03,x2=xs+.03,ang=Math.atan2(p.Y(P.f(x2))-p.Y(P.f(x1)),p.X(x2)-p.X(x1)),kS=Math.max(0,1-(now-salto)/450),pulo=Math.sin(kS*Math.PI)*28;
+  c.save();c.translate(p.X(xs),p.Y(P.f(xs))-pulo);c.rotate(ang+(kS>0&&giro?(1-kS)*Math.PI*2:0));
+  c.fillStyle='#ff4fd8';c.fillRect(-18,-5,36,5);G.ponto(c,-11,3,3.5,'#fff');G.ponto(c,11,3,3.5,'#fff');G.sprite(c,SK,PALS,0,-24,3.6);c.restore();
+  // medidor f′
+  if(mostrarD){c.fillStyle='rgba(7,6,26,.95)';c.fillRect(0,H*.66,W,H*.34);
+    const q=G.plano(s,{x0:P.x0,x1:P.x1,y0:-3,y1:3},{mT:H*.68,mB:28,mL:40});G.grade(q,{sy:1.5});G.arcade(c,'MEDIDOR f′(x)',q.mL+8,q.mT+16,'#39c2ff',9,'left');
+    G.curva(q,x=>d(P.f,x),'#39c2ff',3,{brilho:10});c.strokeStyle='rgba(255,255,255,.4)';c.setLineDash([4,4]);c.beginPath();c.moveTo(q.X(xs),p.Y(P.f(xs)));c.lineTo(q.X(xs),q.Y(Math.max(-3,Math.min(3,d(P.f,xs)))));c.stroke();c.setLineDash([]);
+    G.ponto(c,q.X(xs),q.Y(Math.max(-3,Math.min(3,d(P.f,xs)))),6,'#39c2ff','#000');
+    const dv=d(P.f,xs);G.rotulo(c,`f′ = ${F(dv,2)}`,q.X(xs)+10,q.mT+16,Math.abs(dv)<.12?'#39ff88':'#39c2ff');}
+  G.desenhaParts(c);G.desenhaPops(c);
+  if(!rodando&&!acabouPista)G.arcade(c,'APERTE COMEÇAR',W/2,H*.22,'#ffd23f',13);
+}
+prepara();
+}
+</script>
+<script>G.tutorial('skatista');</script>
+</body>
+</html>

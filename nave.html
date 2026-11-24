@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nave da Assíntota</title>
+<link rel="stylesheet" href="comum.css">
+<style>
+/* VOICE: jogo de navinha de fliperama, com paradas para pensar
+   IDEA: um túnel de energia que segue o gráfico de f e some perto das assíntotas
+   PICTURE: espaço com estrelas em movimento, túnel neon, nave em pixel art, salto no hiperespaço
+   COLOUR and TYPE: roxo e ciano neon, nave laranja; Press Start 2P nos avisos
+   LAYOUT: tela de voo grande, perguntas no painel ao lado */
+:root{--cor:var(--roxo)}
+.fig{min-height:480px;cursor:none;touch-action:none}
+.pergunta{border:3px solid var(--roxo);border-radius:4px;padding:12px;margin-top:10px;background:#000}
+</style>
+<script src="grafico.js"></script>
+<script src="tutoriais.js"></script>
+</head>
+<body>
+<div class="stripe"><i style="background:var(--roxo)"></i><i style="background:var(--blue)"></i><i style="background:var(--green)"></i></div>
+<nav class="topo"><a href="index.html">← Voltar ao fliperama</a><span class="marca">LIMITES</span></nav>
+<section class="band">
+  <h1>Nave da Assíntota</h1>
+  <div class="como">
+    <div>Mova o <b>mouse</b> (ou o dedo) para cima e para baixo sobre a tela, ou use <span class="kbd">↑</span> <span class="kbd">↓</span>.</div>
+    <div>Fique dentro do <b>túnel</b>, que segue o gráfico de f. Fora dele, o escudo cai.</div>
+    <div>Perto da <b>assíntota</b> a nave para: diga para onde f(x) vai (+∞, −∞ ou um número).</div>
+  </div>
+  <div class="placar"><div><b id="pF">1/3</b>setor</div><div><b id="pPts">0</b>pontos</div><div><b id="pEsc">100%</b>escudo</div></div>
+  <div class="palco">
+    <div><div class="fig" id="fig"><canvas id="cv"></canvas></div>
+      <div class="leg"><span><i style="background:var(--green)"></i>paredes do túnel</span><span><i style="background:var(--yel)"></i>assíntotas</span></div></div>
+    <aside class="panel" id="painel">
+      <p class="grande" id="fx" style="color:var(--roxo)"></p>
+      <p class="small">Dentro do túnel: pontos sem parar. Resposta certa: +20. Resposta errada: −20% de escudo.</p>
+      <div class="acts"><button class="pri" id="bIr">Decolar!</button></div>
+      <div id="perg"></div>
+      <div class="res" id="res" style="display:none"></div>
+    </aside>
+  </div>
+</section>
+<script>
+{
+const $=id=>document.getElementById(id),F=G.fmt;
+const FASES=[
+  {ex:'f(x) = 1/(x − 3) + 1',f:x=>1/(x-3)+1,x0:0,x1:14,a:3,y:[-6,7],esq:'−∞',dir:'+∞',inf:'1',opInf:['1','0','+∞','3']},
+  {ex:'f(x) = 2x/(x − 5)',f:x=>2*x/(x-5),x0:0,x1:18,a:5,y:[-8,10],esq:'−∞',dir:'+∞',inf:'2',opInf:['2','0','+∞','5']},
+  {ex:'f(x) = 3 − 4/(x − 2)²',f:x=>3-4/(x-2)**2,x0:-2,x1:14,a:2,y:[-8,6],esq:'−∞',dir:'−∞',inf:'3',opInf:['3','−∞','0','−4']},
+];
+const NAVE=['..oo.......','.oyyo......','oyyyyooo...','oyccyyyyoo.','oyccyyyyyyo','oyyyyyyyyo.','oyyyyooo...','.oyyo......','..oo.......'];
+const PALN={o:'#ff8a3d',y:'#ffd23f',c:'#39c2ff'};
+let fi=0,pts=0,esc=100,Fa=null,xs=0,ys=0,alvoY=null,estado='parado',fase=0,warp=0,teclas={};
+const s=G.tela($('cv')),fig=$('fig');let p=null;
+function prepara(){Fa=FASES[fi];xs=Fa.x0;ys=Fa.f(xs);alvoY=ys;estado='parado';fase=0;
+  $('fx').textContent=Fa.ex;$('perg').innerHTML='';$('res').style.display='none';$('bIr').textContent='Decolar!';$('bIr').disabled=false;placar();}
+function placar(){$('pF').textContent=`${fi+1}/${FASES.length}`;$('pPts').textContent=Math.round(pts);$('pEsc').textContent=Math.round(esc)+'%';}
+$('bIr').onclick=()=>{
+  if(estado==='fim'){if(fi<FASES.length-1&&esc>0){fi++;prepara();}else{const r=G.recorde('exatas-nave',Math.round(pts));G.fim($('painel'),{titulo:esc>0?'Missão completa!':'GAME OVER',valor:Math.round(pts),detalhe:'pontos',rec:r});}return;}
+  estado='voando';$('bIr').disabled=true;};
+const mira=e=>{if(!p)return;const r=fig.getBoundingClientRect();alvoY=p.yi(e.clientY-r.top);};
+fig.addEventListener('pointermove',mira);fig.addEventListener('pointerdown',mira);
+addEventListener('keydown',e=>{if(e.key==='ArrowUp'||e.key==='ArrowDown'){teclas[e.key]=true;e.preventDefault();}});
+addEventListener('keyup',e=>{teclas[e.key]=false;});
+function pergunta(txt,ops,certa,depois){estado='pergunta';
+  $('perg').innerHTML=`<div class="pergunta"><b>${txt}</b><div class="opcoes">${G.emb(ops).map(o=>`<button data-o="${o}">${o}</button>`).join('')}</div></div>`;
+  $('perg').querySelector('.opcoes').onclick=e=>{const b=e.target.closest('button');if(!b||b.disabled)return;const ok=b.dataset.o===certa;
+    [...b.parentElement.children].forEach(x=>{x.disabled=true;if(x.dataset.o===certa)x.classList.add('certa');});
+    if(!ok){b.classList.add('errada');esc=Math.max(0,esc-20);G.pop('ESCUDO −20%',s.W/2,s.H*.4,'#ff4d6d');}else{pts+=20;G.pop('CERTO! +20',s.W/2,s.H*.4,'#39ff88');}placar();
+    setTimeout(()=>{$('perg').innerHTML='';depois();},900);};}
+let ult=0;
+G.loop(now=>{const dt=Math.min(.05,(now-(ult||now))/1000);ult=now;warp=Math.max(0,warp-dt);
+  if(estado==='voando'){
+    const v=(Fa.x1-Fa.x0)/22,st=(Fa.y[1]-Fa.y[0])*.9*dt;xs+=v*dt;
+    if(teclas.ArrowUp)alvoY=(alvoY??ys)+st;if(teclas.ArrowDown)alvoY=(alvoY??ys)-st;
+    if(alvoY!==null)ys+=(alvoY-ys)*Math.min(1,dt*8);
+    const fy=Fa.f(xs),tol=(Fa.y[1]-Fa.y[0])*.075,dentro=isFinite(fy)&&Math.abs(ys-fy)<tol;
+    if(dentro)pts+=dt*8;else{esc=Math.max(0,esc-dt*12);if(p&&Math.random()<.3)G.explode(p.X(xs),p.Y(ys),['#ff4d6d','#ffd23f'],2,2);}placar();
+    if(esc<=0){estado='fim';G.explode(p.X(xs),p.Y(ys),['#ff8a3d','#ffd23f','#fff'],60,6);$('res').className='res err';$('res').innerHTML='<b>Escudo esgotado!</b>';$('res').style.display='block';$('bIr').textContent='Ver resultado';$('bIr').disabled=false;}
+    if(fase===0&&xs>=Fa.a-.7){pergunta(`Quando x → ${F(Fa.a)}⁻ (pela esquerda), f(x) → ?`,['+∞','−∞','0',F(Fa.f(Fa.a-.7),1)],Fa.esq,()=>{fase=1;
+      pergunta(`E quando x → ${F(Fa.a)}⁺ (pela direita), f(x) → ?`,['+∞','−∞','0','1'],Fa.dir,()=>{fase=2;xs=Fa.a+.7;ys=Fa.f(xs);alvoY=ys;warp=1;estado='voando';});});}
+    if(fase===2&&xs>=Fa.x1-.3){fase=3;pergunta('A nave vai seguir para sempre. Quando x → +∞, f(x) → ?',Fa.opInf,Fa.inf,()=>{estado='fim';
+      $('res').className='res';$('res').innerHTML=`<b>Setor concluído!</b> Assíntota vertical em x = ${F(Fa.a)} (f → ${Fa.esq} e ${Fa.dir}) e assíntota horizontal y = ${Fa.inf}.`;$('res').style.display='block';
+      $('bIr').textContent=fi<FASES.length-1?'Próximo setor':'Ver resultado';$('bIr').disabled=false;});}}
+  desenha(now);});
+function desenha(now){
+  s.limpa();if(!s.W||!Fa)return;const c=s.ctx,W=s.W,H=s.H;
+  c.fillStyle='#05040f';c.fillRect(0,0,W,H);
+  p=G.plano(s,{x0:Fa.x0,x1:Fa.x1,y0:Fa.y[0],y1:Fa.y[1]},{mL:40,mB:28});
+  // estrelas em três camadas (paralaxe); no salto viram riscos
+  for(let i=0;i<90;i++){const cam=1+i%3,x=((i*137.5-now*.02*cam*(estado==='voando'?1:.2))%W+W)%W,y=(i*71.3)%H;c.fillStyle=`rgba(255,255,255,${.25*cam})`;c.fillRect(x,y,warp>0?40*warp*cam:1.5*cam,1.5);}
+  c.strokeStyle='rgba(255,255,255,.15)';c.lineWidth=1;c.beginPath();c.moveTo(p.mL,p.Y(0));c.lineTo(W-p.mR,p.Y(0));c.stroke();
+  c.fillStyle='rgba(255,255,255,.5)';c.font='12px Archivo';c.textAlign='center';for(let x=Math.ceil(Fa.x0);x<=Fa.x1;x+=2)c.fillText(F(x),p.X(x),H-8);
+  c.textAlign='right';for(let y=Math.ceil(Fa.y[0]/2)*2;y<=Fa.y[1];y+=2)c.fillText(F(y),p.mL-6,p.Y(y)+4);
+  // túnel visível até um pouco à frente (radar)
+  const tol=(Fa.y[1]-Fa.y[0])*.075,ver=estado==='fim'?Fa.x1:Math.min(Fa.x1,xs+1.6);G.prende(p);
+  c.fillStyle='rgba(57,255,136,.08)';c.beginPath();let on=false;
+  for(const lado of[1,-1]){c.strokeStyle='#39ff88';c.lineWidth=2.5;c.shadowColor='#39ff88';c.shadowBlur=10;c.beginPath();on=false;
+    for(let px=p.X(Fa.x0);px<=p.X(ver);px+=2){const x=p.xi(px),y=Fa.f(x);const ok=isFinite(y)&&Math.abs(x-Fa.a)>.08&&Math.abs(y)<60;ok&&on?c.lineTo(px,p.Y(y+lado*tol)):ok&&c.moveTo(px,p.Y(y+lado*tol));on=ok;}c.stroke();}
+  c.shadowBlur=0;
+  if(fase>=1||estado==='fim'){c.strokeStyle='#ffd23f';c.setLineDash([8,6]);c.lineWidth=2;c.beginPath();c.moveTo(p.X(Fa.a),p.mT);c.lineTo(p.X(Fa.a),H-p.mB);c.stroke();G.rotulo(c,'x = '+F(Fa.a),p.X(Fa.a)+6,p.mT+14,'#ffd23f');}
+  if(fase>=3&&estado==='fim'){const L=+Fa.inf;c.beginPath();c.moveTo(p.mL,p.Y(L));c.lineTo(W-p.mR,p.Y(L));c.stroke();G.rotulo(c,'y = '+Fa.inf,W-p.mR-60,p.Y(L)-14,'#ffd23f');}
+  c.setLineDash([]);
+  if(estado!=='fim'){const gr=c.createLinearGradient(p.X(xs+1),0,p.X(xs+1.8),0);gr.addColorStop(0,'rgba(5,4,15,0)');gr.addColorStop(1,'rgba(5,4,15,1)');c.fillStyle=gr;c.fillRect(p.X(xs+1),0,W,H);G.arcade(c,'RADAR',W-60,24,'#39c2ff',9);}
+  G.solta(p);
+  // nave
+  const X=p.X(xs),Y=p.Y(Math.max(Fa.y[0],Math.min(Fa.y[1],ys)));
+  if(esc>0){if(estado==='voando'){c.fillStyle=Math.random()<.5?'#ffd23f':'#ff4d1a';c.fillRect(X-30-Math.random()*10,Y-3,14,6);}G.sprite(c,NAVE,PALN,X,Y,3.2);}
+  // escudo
+  c.fillStyle='#000';c.fillRect(14,12,124,14);c.fillStyle=esc>40?'#39ff88':'#ff4d6d';c.fillRect(16,14,1.2*esc,10);G.arcade(c,'ESCUDO',146,24,'#fff',8,'left');
+  if(estado==='parado')G.arcade(c,'APERTE DECOLAR',W/2,H/2,'#ffd23f',13);
+  if(estado==='pergunta')G.arcade(c,'NAVE PARADA: RESPONDA',W/2,46,'#ffd23f',11);
+  if(warp>0)G.arcade(c,'HIPERESPAÇO!',W/2,H/2,'#39c2ff',16);
+  G.desenhaParts(c);G.desenhaPops(c);
+}
+prepara();
+}
+</script>
+<script>G.tutorial('nave');</script>
+</body>
+</html>

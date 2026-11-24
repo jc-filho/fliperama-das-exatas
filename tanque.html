@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Poção Exata</title>
+<link rel="stylesheet" href="comum.css">
+<style>
+/* VOICE: oficina de alquimista de RPG, suspense no fim
+   IDEA: uma torneira mágica com vazão variável e um frasco coberto: só a integral diz quando fechar
+   PICTURE: gráfico da vazão com a área enchendo; frasco de poção coberto por um pano, revelado no fim
+   COLOUR and TYPE: poção rosa, área amarela, madeira; Press Start 2P nos avisos
+   LAYOUT: gráfico + frasco à esquerda, controles à direita */
+:root{--cor:var(--pink)}
+.fig{min-height:460px}
+.fechar{width:100%;min-height:66px;font:15px var(--pixel)}
+</style>
+<script src="grafico.js"></script>
+<script src="tutoriais.js"></script>
+</head>
+<body>
+<div class="stripe"><i style="background:var(--pink)"></i><i style="background:var(--yel)"></i><i style="background:var(--roxo)"></i></div>
+<nav class="topo"><a href="index.html">← Voltar ao fliperama</a><span class="marca">INTEGRAIS</span></nav>
+<section class="band">
+  <h1>Poção Exata</h1>
+  <div class="como">
+    <div>A torneira mágica solta poção com vazão <b>f(t)</b> mL por segundo. O frasco está <b>coberto</b>.</div>
+    <div>O volume que entrou até T é a <b>área sob o gráfico</b>: V = ∫₀ᵀ f(t) dt. Calcule o T certo.</div>
+    <div>Abra a torneira e aperte <b>FECHAR</b> (ou <span class="kbd">Espaço</span>) na hora exata. O relógio é de verdade.</div>
+  </div>
+  <div class="placar"><div><b id="pNiv">1/5</b>poção</div><div><b id="pPts">0</b>pontos</div></div>
+  <div class="palco">
+    <div>
+      <div class="fig"><canvas id="cv"></canvas></div>
+      <div class="leg"><span><i style="background:var(--pink)"></i>vazão f(t)</span><span><i style="background:rgba(255,210,63,.7);height:10px"></i>poção que já entrou (área)</span></div>
+    </div>
+    <aside class="panel" id="painel">
+      <h3 id="tit"></h3>
+      <p class="grande" id="fx" style="color:var(--pink)"></p>
+      <p id="cap"></p>
+      <div class="acts"><button class="pri" id="bAbre">Abrir torneira</button></div>
+      <button class="pri fechar" id="bFecha" disabled style="margin-top:12px">FECHAR!</button>
+      <div class="res" id="res" style="display:none"></div>
+    </aside>
+  </div>
+</section>
+<script>
+{
+const $=id=>document.getElementById(id),F=G.fmt;
+const NIV=[
+  {nome:'Poção de Vida',ex:'f(t) = 3',f:()=>3,V:24,To:8,conta:'∫₀ᵀ 3 dt = 3T = 24 ⇒ T = 8 s',cor:'#ff4d6d'},
+  {nome:'Poção de Mana',ex:'f(t) = 2t',f:t=>2*t,V:36,To:6,conta:'∫₀ᵀ 2t dt = T² = 36 ⇒ T = 6 s',cor:'#39c2ff'},
+  {nome:'Poção de Velocidade',ex:'f(t) = 1 + t',f:t=>1+t,V:12,To:4,conta:'∫₀ᵀ (1 + t) dt = T + T²/2 = 12 ⇒ T² + 2T − 24 = 0 ⇒ T = 4 s',cor:'#39ff88'},
+  {nome:'Poção de Força',ex:'f(t) = 10 − t',f:t=>10-t,V:42,To:6,conta:'∫₀ᵀ (10 − t) dt = 10T − T²/2 = 42 ⇒ T² − 20T + 84 = 0 ⇒ T = 6 s',cor:'#ff8a3d'},
+  {nome:'Elixir Lendário',ex:'f(t) = t²/4',f:t=>t*t/4,V:18,To:6,conta:'∫₀ᵀ t²/4 dt = T³/12 = 18 ⇒ T³ = 216 ⇒ T = 6 s',cor:'#ffd23f'},
+];
+let ni=0,pts=0,N=null,t=0,rodando=false,fechado=false,vol=0,revela=0;
+const s=G.tela($('cv'));
+function prepara(){N=NIV[ni];t=0;vol=0;rodando=false;fechado=false;revela=0;
+  $('tit').textContent=`${N.nome} (${ni+1} de ${NIV.length})`;$('fx').textContent=N.ex+' mL/s';$('cap').innerHTML=`Capacidade do frasco: <b>${N.V} mL</b>`;
+  $('res').style.display='none';$('bAbre').textContent='Abrir torneira';$('bAbre').disabled=false;$('bFecha').disabled=true;placar();}
+function placar(){$('pNiv').textContent=`${ni+1}/${NIV.length}`;$('pPts').textContent=pts;}
+$('bAbre').onclick=()=>{
+  if(fechado){if(ni<NIV.length-1){ni++;prepara();}else{const r=G.recorde('exatas-tanque',pts);G.fim($('painel'),{titulo:'Todas as poções prontas!',valor:pts,detalhe:`de ${NIV.length*100} pontos`,rec:r});}return;}
+  rodando=true;$('bAbre').disabled=true;$('bFecha').disabled=false;$('bFecha').focus();};
+let fx=0,fy=0;
+function fecha(){if(!rodando)return;rodando=false;fechado=true;$('bFecha').disabled=true;
+  const err=Math.abs(vol-N.V)/N.V,n=Math.max(0,Math.round(100*(1-3*err)));pts+=n;placar();
+  G.pop(n>=90?'PERFEITO! +'+n:n>=60?'BOM! +'+n:'+'+n,fx,fy-40,n>=90?'#39ff88':n>=60?'#ffd23f':'#ff4d6d');if(n>=90)G.explode(fx,fy,[N.cor,'#ffd23f','#fff'],40,4);
+  $('res').className='res'+(n<60?' err':'');
+  $('res').innerHTML=`<b>${n} pontos.</b> Você fechou em T = ${F(t,2)} s com ${F(vol,1)} mL (${vol>N.V?'transbordou '+F(vol-N.V,1)+' mL':'faltaram '+F(N.V-vol,1)+' mL'}).<br>Conta: ${N.conta}`;
+  $('res').style.display='block';$('bAbre').textContent=ni<NIV.length-1?'Próxima poção':'Ver resultado';$('bAbre').disabled=false;}
+$('bFecha').onclick=fecha;addEventListener('keydown',e=>{if(e.key===' '){e.preventDefault();fecha();}});
+let ult=0;
+G.loop(now=>{const dt=Math.min(.05,(now-(ult||now))/1000);ult=now;
+  if(rodando){for(let k=0;k<10;k++){vol+=N.f(t+dt/20)*dt/10;t+=dt/10;}if(t>=12)fecha();}
+  if(fechado)revela=Math.min(1,revela+dt*1.5);desenha(now);});
+function desenha(now){
+  s.limpa();if(!s.W||!N)return;const c=s.ctx,W=s.W,H=s.H,tw=Math.min(170,W*.27);
+  c.fillStyle='#120d22';c.fillRect(0,0,W,H);
+  const fmax=Math.max(...Array.from({length:61},(_,i)=>N.f(i/5)));
+  const p=G.plano(s,{x0:0,x1:12,y0:0,y1:fmax*1.2+.5},{mR:tw+34});
+  G.grade(p,{tx:'t (s)',ty:'f(t) (mL/s)'});
+  if(t>0){c.fillStyle='rgba(255,210,63,.55)';c.beginPath();c.moveTo(p.X(0),p.Y(0));for(let k=0;k<=150;k++){const tm=t*k/150;c.lineTo(p.X(tm),p.Y(N.f(tm)));}c.lineTo(p.X(t),p.Y(0));c.fill();}
+  G.curva(p,N.f,'#ff4fd8',4,{brilho:12});
+  if(fechado){c.strokeStyle='#39ff88';c.setLineDash([6,5]);c.lineWidth=2.5;c.beginPath();c.moveTo(p.X(N.To),p.mT);c.lineTo(p.X(N.To),p.Y(0));c.stroke();c.setLineDash([]);G.rotulo(c,`T certo = ${F(N.To)} s`,p.X(N.To)+6,p.mT+14,'#39ff88');}
+  c.strokeStyle='#fff';c.lineWidth=2;c.beginPath();c.moveTo(p.X(t),p.mT);c.lineTo(p.X(t),p.Y(0));c.stroke();G.arcade(c,F(t,1)+' s',p.X(t),p.mT+12,'#fff',10);
+  // bancada, torneira e frasco
+  const cx=W-tw/2-16,base=H-46,fw=tw*.78,fh=Math.min(H*.55,250),topo=base-fh;fx=cx;fy=topo+fh*.5;
+  c.fillStyle='#5c3a1a';c.fillRect(W-tw-30,base,tw+30,14);c.fillStyle='#3b2412';c.fillRect(W-tw-30,base+14,tw+30,H);
+  c.fillStyle='#8f8aa8';c.fillRect(cx-40,26,52,12);c.fillRect(cx-6,26,12,28);
+  if(rodando){c.fillStyle=N.cor;c.fillRect(cx-3,54,6,topo-50);}
+  // frasco (corpo redondo + gargalo)
+  const fr=()=>{c.beginPath();c.moveTo(cx-fw*.16,topo-18);c.lineTo(cx-fw*.16,topo+fh*.25);c.quadraticCurveTo(cx-fw/2,topo+fh*.3,cx-fw/2,topo+fh*.62);c.quadraticCurveTo(cx-fw/2,base,cx,base);c.quadraticCurveTo(cx+fw/2,base,cx+fw/2,topo+fh*.62);c.quadraticCurveTo(cx+fw/2,topo+fh*.3,cx+fw*.16,topo+fh*.25);c.lineTo(cx+fw*.16,topo-18);c.closePath();};
+  c.save();fr();c.clip();c.fillStyle='rgba(255,255,255,.06)';c.fillRect(0,0,W,H);
+  if(fechado){const nv=Math.min(1,vol/N.V)*revela,yl=base-(fh+18)*nv;c.fillStyle=N.cor;c.globalAlpha=.85;c.fillRect(cx-fw,yl+3*Math.sin(now/200),fw*2,base-yl);c.globalAlpha=1;
+    c.fillStyle='rgba(255,255,255,.5)';for(let i=0;i<6;i++)G.ponto(c,cx-fw*.3+((i*37)%(fw*.6)),base-((now/8+i*30)%Math.max(1,base-yl)),3,'rgba(255,255,255,.5)');}
+  c.restore();fr();c.strokeStyle='#d6d2ff';c.lineWidth=3;c.stroke();
+  // pano cobrindo o frasco enquanto não fecha
+  if(!fechado||revela<1){const k=fechado?revela:0;c.save();c.globalAlpha=1-k;c.fillStyle='#6b2d8f';c.beginPath();c.moveTo(cx-fw*.6,topo-24-k*80);c.lineTo(cx+fw*.6,topo-24-k*80);c.lineTo(cx+fw*.62,base+2);for(let x=cx+fw*.6;x>cx-fw*.6;x-=12)c.lineTo(x,base+2+(x%24?6:0));c.closePath();c.fill();
+    G.arcade(c,'?',cx,topo+fh*.55,'#ffd23f',22);c.restore();}
+  if(fechado&&vol>N.V&&revela>=1)G.arcade(c,'TRANSBORDOU!',cx,topo-30,'#ff4d6d',9);
+  G.arcade(c,N.V+' mL',cx,base+34,'#fff',10);
+  G.desenhaParts(c);G.desenhaPops(c);
+}
+prepara();
+}
+</script>
+<script>G.tutorial('tanque');</script>
+</body>
+</html>

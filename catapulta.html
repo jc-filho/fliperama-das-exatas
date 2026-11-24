@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cerco das Derivadas</title>
+<link rel="stylesheet" href="comum.css">
+<style>
+/* VOICE: jogo de estilingue de fliperama, com a conta à vista
+   IDEA: cerco a um castelo: a bola de fogo voa numa parábola e a derivada é a direção do voo
+   PICTURE: noite roxa, castelo de pedra, gosma-monstro no alvo, trajetória neon e o topo onde y′ = 0
+   COLOUR and TYPE: céu roxo, fogo laranja, gosma verde, guia amarela; Press Start 2P + Archivo
+   LAYOUT: cenário grande à esquerda, mira e contas à direita */
+:root{--cor:var(--org)}
+.fig{min-height:480px}
+.conta{font-weight:600;font-size:15px;line-height:1.75;background:#000;border:3px solid var(--line);border-radius:4px;padding:10px 12px;margin-top:10px}
+.conta b{color:var(--blue)}
+.estrelas{font:16px var(--pixel);color:var(--yel)}
+</style>
+<script src="grafico.js"></script>
+<script src="tutoriais.js"></script>
+</head>
+<body>
+<div class="stripe"><i style="background:var(--org)"></i><i style="background:var(--yel)"></i><i style="background:var(--green)"></i></div>
+<nav class="topo"><a href="index.html">← Voltar ao fliperama</a><span class="marca">DERIVADAS</span></nav>
+<section class="band">
+  <h1>Cerco das Derivadas</h1>
+  <div class="como">
+    <div>Ajuste o <b>ângulo</b> e a <b>força</b> da catapulta (sliders ou setas do teclado).</div>
+    <div>Lance a bola de fogo e acerte a <b>gosma</b>, passando por cima das muralhas.</div>
+    <div>O topo do voo é onde a derivada vale zero: <b>y′(x) = 0</b>. Use isso para calcular.</div>
+  </div>
+  <div class="placar"><div><b id="pFase">1/6</b>fase</div><div><b id="pTiros">0</b>tiros</div><div><b id="pEst">0</b>estrelas</div></div>
+  <div class="palco">
+    <div>
+      <div class="fig"><canvas id="cv"></canvas></div>
+      <div class="leg"><span><i style="background:var(--yel)"></i>mira e trajetória</span><span><i style="background:var(--blue)"></i>direção do voo (derivada)</span><span><i class="b" style="background:var(--blue)"></i>topo: y′ = 0</span></div>
+    </div>
+    <aside class="panel" id="painel">
+      <h3 id="missao"></h3>
+      <div class="par"><label for="ang"><span>Ângulo θ</span><span id="angTxt"></span></label><input type="range" id="ang" min="10" max="80" step="1" value="45"></div>
+      <div class="par"><label for="vel"><span>Força (velocidade v)</span><span id="velTxt"></span></label><input type="range" id="vel" min="10" max="30" step="0.5" value="18"></div>
+      <div class="acts"><button class="pri" id="bLanca">Lançar!</button><button id="bConta">Mostrar cálculos (−1 ★)</button></div>
+      <div class="conta" id="conta"></div>
+      <div class="res" id="res" style="display:none"></div>
+      <button id="bProx" class="pri" style="display:none;margin-top:4px">Próxima fase</button>
+      <p class="small" style="margin-top:10px">1 tiro = ★★★ · 2 tiros = ★★ · mais = ★. Teclado: <span class="kbd">←</span><span class="kbd">→</span> ângulo · <span class="kbd">↑</span><span class="kbd">↓</span> força · <span class="kbd">Espaço</span> lança.</p>
+    </aside>
+  </div>
+</section>
+<script>
+{
+const g=9.8,$=id=>document.getElementById(id),F=G.fmt;
+/* Fases: posição do alvo T, altura da torre p (0 = no chão) e muralha [posição, altura] */
+const FASES=[
+  {T:20,p:0,muro:null,txt:'Fase 1: acerte a gosma a 20 m.'},
+  {T:35,p:0,muro:[18,6],txt:'Fase 2: passe por cima da muralha de 6 m.'},
+  {T:30,p:8,muro:null,txt:'Fase 3: a gosma está numa torre de 8 m.'},
+  {T:45,p:0,muro:[25,14],txt:'Fase 4: o topo do voo precisa passar de 14 m.'},
+  {T:24,p:0,muro:[15,12],txt:'Fase 5: muralha alta e perto. Lance bem para cima!'},
+  {T:50,p:6,muro:[30,10],txt:'Fase 6 (chefe): muralha de 10 m e torre de 6 m.'},
+];
+const GOSMA=['..gggggg..','.gGGGGGGg.','gGGwkGwkGg','gGGwkGwkGg','gGGGGGGGGg','gGGGrrGGGg','gGGGGGGGGg','.gggggggg.'];
+const PALG={g:'#1aa35a',G:'#39ff88',w:'#ffffff',k:'#000000',r:'#ff4d6d'};
+const FOGO=['..oyo..','.oyyyo.','oyywyyo','oywwwyo','oyywyyo','.oyyyo.','..ooo..'];
+const PALF={o:'#ff4d1a',y:'#ffd23f',w:'#fff7d6'};
+let fi=0,tiros=0,estrelas=0,usouConta=false,voo=null,rastros=[],acertou=false;
+const s=G.tela($('cv'));
+function coef(){const th=+$('ang').value*Math.PI/180,v=+$('vel').value;return{th,v,A:Math.tan(th),B:g/(2*v*v*Math.cos(th)**2)};}
+function painel(){
+  const{A,B}=coef(),xp=A/(2*B),yp=A*xp-B*xp*xp,alc=A/B;
+  $('angTxt').textContent=$('ang').value+'°';$('velTxt').textContent=F(+$('vel').value,1)+' m/s';
+  $('conta').innerHTML=`Trajetória: y(x) = ${F(A)}·x − ${F(B,4)}·x²<br>Derivada: y′(x) = ${F(A)} − ${F(2*B,4)}·x`+
+    (usouConta?`<br>Topo: y′ = 0 ⇒ x = <b>${F(xp,1)} m</b>, altura <b>${F(yp,1)} m</b><br>Cai no chão (y = 0) em x = <b>${F(alc,1)} m</b>`:'<br><span class="small">Dica: resolva y′(x) = 0 para achar o topo do voo.</span>');
+}
+function inicia(){const f=FASES[fi];tiros=0;usouConta=false;rastros=[];voo=null;acertou=false;
+  $('missao').textContent=f.txt;$('res').style.display='none';$('bProx').style.display='none';$('bLanca').disabled=false;$('bConta').disabled=false;placar();painel();}
+function placar(){$('pFase').textContent=`${fi+1}/${FASES.length}`;$('pTiros').textContent=tiros;$('pEst').textContent=estrelas;}
+['ang','vel'].forEach(id=>$(id).addEventListener('input',painel));
+$('bConta').onclick=()=>{usouConta=true;$('bConta').disabled=true;painel();};
+$('bLanca').onclick=()=>{if(voo||acertou)return;tiros++;placar();voo={...coef(),t:0,pts:[[0,0]],fim:null};};
+addEventListener('keydown',e=>{const a=$('ang'),v=$('vel');
+  if(e.key==='ArrowLeft'){a.value=+a.value+1;painel();e.preventDefault();}
+  else if(e.key==='ArrowRight'){a.value=+a.value-1;painel();e.preventDefault();}
+  else if(e.key==='ArrowUp'){v.value=+v.value+.5;painel();e.preventDefault();}
+  else if(e.key==='ArrowDown'){v.value=+v.value-.5;painel();e.preventDefault();}
+  else if(e.key===' '&&!e.target.closest('button')){$('bLanca').click();e.preventDefault();}});
+function bate(x,y){const f=FASES[fi];
+  if(f.muro&&Math.abs(x-f.muro[0])<=.8&&y<=f.muro[1])return'muro';
+  if(Math.abs(x-f.T)<=1.2&&y>=f.p&&y<=f.p+2.4)return'alvo';
+  if(f.p>0&&Math.abs(x-f.T)<=1.8&&y<=f.p)return'torre';
+  if(y<0)return'chão';if(x>64)return'fora';return null;}
+let P=null;
+function termina(oque){
+  const{A,B}=voo,xp=A/(2*B),ult=voo.pts[voo.pts.length-1],incl=A-2*B*ult[0];rastros.push({pts:voo.pts,A,B});voo=null;
+  const X=P?P.X(ult[0]):0,Y=P?P.Y(Math.max(0,ult[1])):0;
+  if(oque==='alvo'){acertou=true;let e=tiros===1?3:tiros===2?2:1;if(usouConta)e=Math.max(1,e-1);estrelas+=e;placar();
+    G.explode(X,Y,['#39ff88','#1aa35a','#ffd23f','#ffffff'],50,5);G.pop('K.O.! '+'★'.repeat(e),X,Y-20,'#ffd23f');
+    $('res').className='res';$('res').innerHTML=`<b>Acertou! <span class="estrelas">${'★'.repeat(e)}${'☆'.repeat(3-e)}</span></b><br>O topo do voo foi em x = ${F(xp,1)} m, onde y′(x) = 0. Na hora do impacto, y′ = ${F(incl,2)} ${incl<0?'(descendo)':'(ainda subindo)'}.`;
+    $('bLanca').disabled=true;$('bConta').disabled=true;$('bProx').textContent=fi===FASES.length-1?'Ver resultado':'Próxima fase';$('bProx').style.display='inline-flex';}
+  else{G.explode(X,Y,['#ff8a3d','#ffd23f','#888'],18,3);G.pop(oque==='chão'?'ERROU!':'BAM!',X,Y-10,'#ff4d6d');
+    $('res').className='res err';
+    $('res').innerHTML=`<b>${oque==='muro'?'Bateu na muralha.':oque==='torre'?'Bateu na torre.':'Não acertou.'}</b> Topo em x = ${F(xp,1)} m (y′ = 0), altura ${F(A*xp-B*xp*xp,1)} m. ${oque==='chão'?`Caiu em x = ${F(ult[0],1)} m; a gosma está em ${FASES[fi].T} m.`:''}`;}
+  $('res').style.display='block';}
+$('bProx').onclick=()=>{if(fi<FASES.length-1){fi++;inicia();}else{const r=G.recorde('exatas-catapulta',estrelas);G.fim($('painel'),{titulo:'Castelo conquistado!',valor:estrelas+' ★',detalhe:`de ${FASES.length*3} estrelas possíveis`,rec:r,fr:v=>v+' ★'});}};
+let ult=0;
+G.loop(now=>{const dt=Math.min(.05,(now-(ult||now))/1000)*1.7;ult=now;
+  if(voo){for(let k=0;k<8&&voo;k++){voo.t+=dt/8;const x=voo.v*Math.cos(voo.th)*voo.t,y=voo.v*Math.sin(voo.th)*voo.t-g*voo.t*voo.t/2;voo.pts.push([x,y]);const b=bate(x,y);if(b)termina(b);}}
+  desenha(now);});
+function pedras(c,x,y,w,h,cor){c.fillStyle=cor;c.fillRect(x,y,w,h);c.strokeStyle='rgba(0,0,0,.45)';c.lineWidth=2;
+  const bh=10;for(let yy=y+h;yy>y;yy-=bh){c.beginPath();c.moveTo(x,yy);c.lineTo(x+w,yy);c.stroke();const off=((y+h-yy)/bh)%2?0:w/4;for(let xx=x+off;xx<x+w;xx+=w/2){c.beginPath();c.moveTo(xx,yy);c.lineTo(xx,Math.max(y,yy-bh));c.stroke();}}
+  c.fillStyle=cor;for(let xx=x;xx<x+w-4;xx+=12)c.fillRect(xx,y-7,7,7);}
+function desenha(now){
+  s.limpa();if(!s.W)return;const c=s.ctx,W=s.W,H=s.H;
+  // céu noturno, lua e estrelas
+  const ceu=c.createLinearGradient(0,0,0,H);ceu.addColorStop(0,'#1a0f45');ceu.addColorStop(1,'#4a2475');c.fillStyle=ceu;c.fillRect(0,0,W,H);
+  c.fillStyle='#fff';for(let i=0;i<50;i++){const x=(i*97.3)%W,y=(i*41.7)%(H*.55),b=.4+.6*Math.abs(Math.sin(now/700+i));c.globalAlpha=b;c.fillRect(x,y,2,2);}c.globalAlpha=1;
+  G.ponto(c,W*.82,H*.16,26,'#fff3c4');G.ponto(c,W*.82+9,H*.16-6,22,'#4a2475'.replace('4a','2c'));
+  const p=P=G.plano(s,{x0:-3,x1:64,y0:-3,y1:34},{igual:true,mB:28,mL:40});const X=p.X,Y=p.Y,f=FASES[fi];
+  // colinas e chão
+  c.fillStyle='#2b1a5e';c.beginPath();c.moveTo(0,Y(0));for(let x=0;x<=W;x+=20)c.lineTo(x,Y(0)-30-18*Math.sin(x/90));c.lineTo(W,Y(0));c.fill();
+  c.fillStyle='#1f7a3f';c.fillRect(0,Y(0),W,H-Y(0));c.fillStyle='#39ff88';for(let x=0;x<W;x+=8)c.fillRect(x,Y(0),4,4);
+  c.fillStyle='rgba(255,255,255,.55)';c.font='12px Archivo';c.textAlign='center';for(let x=0;x<=60;x+=10)c.fillText(x+' m',X(x),H-8);
+  // muralha e torre
+  if(f.muro)pedras(c,X(f.muro[0]-.8),Y(f.muro[1]),X(1.6)-X(0),Y(0)-Y(f.muro[1]),'#7d7a99');
+  if(f.p>0)pedras(c,X(f.T-1.8),Y(f.p),X(3.6)-X(0),Y(0)-Y(f.p),'#8f8aa8');
+  // gosma (alvo)
+  if(!acertou){const bob=Math.sin(now/260)*2;G.sprite(c,GOSMA,PALG,X(f.T),Y(f.p+1.1)+bob,Math.max(2.5,(X(2.4)-X(0))/10));}
+  else G.arcade(c,'K.O.!',X(f.T),Y(f.p+3),'#39ff88',14);
+  // catapulta: base de madeira + braço apontando no ângulo
+  const{A,B,th}=coef();c.fillStyle='#6d4524';c.fillRect(X(-1.6),Y(.8),X(3.2)-X(0),Y(0)-Y(.8));G.ponto(c,X(-1),Y(0),5,'#3b2412');G.ponto(c,X(1),Y(0),5,'#3b2412');
+  c.save();c.translate(X(0),Y(.4));c.rotate(-th);c.fillStyle='#8b5a2b';c.fillRect(0,-4,X(3.2)-X(0),8);c.restore();
+  G.prende(p);
+  // mira
+  if(!voo&&!acertou){c.fillStyle='#ffd23f';for(let x=.6;x<=10;x+=.6){const y=A*x-B*x*x;c.globalAlpha=1-x/11;c.fillRect(X(x)-2,Y(y)-2,4,4);}c.globalAlpha=1;}
+  // tiros anteriores com o topo marcado
+  rastros.forEach((r,i)=>{const at=i===rastros.length-1;c.fillStyle=at?'#ffd23f':'rgba(255,210,63,.3)';r.pts.forEach(([x,y],j)=>{if(j%6===0)c.fillRect(X(x)-2,Y(y)-2,4,4);});
+    if(at){const xp=r.A/(2*r.B),yp=r.A*xp-r.B*xp*xp;c.strokeStyle='#39c2ff';c.lineWidth=3;c.shadowColor='#39c2ff';c.shadowBlur=10;c.beginPath();c.moveTo(X(xp-5),Y(yp));c.lineTo(X(xp+5),Y(yp));c.stroke();c.shadowBlur=0;
+      G.ponto(c,X(xp),Y(yp),6,'#39c2ff','#000');G.rotulo(c,`topo: y′ = 0 (x = ${F(xp,1)})`,X(xp)+10,Y(yp)-20,'#39c2ff');}});
+  // bola de fogo em voo + seta da derivada
+  if(voo){const[x,y]=voo.pts[voo.pts.length-1],d=voo.A-2*voo.B*x,ang=Math.atan(d);
+    for(let k=1;k<10;k++){const q=voo.pts[Math.max(0,voo.pts.length-1-k*3)];c.globalAlpha=.5-k*.05;G.ponto(c,X(q[0]),Y(q[1]),6-k*.5,k%2?'#ff8a3d':'#ffd23f');}c.globalAlpha=1;
+    c.strokeStyle='#39c2ff';c.lineWidth=3;c.beginPath();c.moveTo(X(x),Y(y));c.lineTo(X(x)+44*Math.cos(ang),Y(y)-44*Math.sin(ang));c.stroke();
+    G.sprite(c,FOGO,PALF,X(x),Y(y),3,{rot:now/80});G.rotulo(c,`y′ = ${F(d,2)}`,X(x)+14,Y(y)+28,'#39c2ff');}
+  else if(!acertou)G.sprite(c,FOGO,PALF,X(0)+(X(3.2)-X(0))*Math.cos(th),Y(.4)-(X(3.2)-X(0))*Math.sin(th),3);
+  G.solta(p);
+  G.desenhaParts(c);G.desenhaPops(c);
+  G.arcade(c,`FASE ${fi+1}`,14,26,'#ffd23f',11,'left');
+}
+inicia();
+}
+</script>
+<script>G.tutorial('catapulta');</script>
+</body>
+</html>

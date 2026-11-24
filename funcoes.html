@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Caça-Estrelas de Funções</title>
+<link rel="stylesheet" href="comum.css">
+<script src="grafico.js"></script>
+<script src="tutoriais.js"></script>
+<style>
+/* VOICE: desafio rápido de sala de aula
+   IDEA: papel quadriculado onde o gráfico precisa passar pelas estrelas
+   PICTURE: plano cartesiano grande com estrelas-alvo e a curva do jogador
+   COLOUR and TYPE: azul do gráfico, amarelo das estrelas; Archivo
+   LAYOUT: plano à esquerda, fórmula e controles à direita */
+.jogo{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:22px;margin-top:16px}
+.fig{min-height:480px;background:radial-gradient(circle at 50% 30%,#1c1450,#07061a 75%)}
+.leg{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;margin-top:8px}.leg span{display:inline-flex;align-items:center;gap:6px}.leg i{width:18px;height:4px;border-radius:2px;display:inline-block}.leg i.b{width:12px;height:12px;border-radius:50%}
+.fase{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline}
+.formula{font-size:clamp(22px,2.6vw,28px);font-weight:800;color:var(--blue);margin:10px 0 14px;word-break:break-word}
+.par{margin-bottom:12px}
+.par label{display:flex;justify-content:space-between;font-weight:600}
+.par .small{display:block;margin-top:-2px}
+.prog{display:flex;gap:6px;margin:6px 0 12px}
+.prog i{flex:1;height:6px;border-radius:3px;background:var(--line)}
+.prog i.ok{background:var(--yel)}.prog i.at{background:var(--blue)}
+.estado{font-weight:800;font-size:18px;margin:6px 0 10px}
+.estado.win{color:var(--green)}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+.acts .pri{background:var(--blue);color:#fff;border-color:var(--blue)}
+details{margin-top:14px}summary{cursor:pointer;font-weight:600;min-height:32px}
+.fim{text-align:center;padding:10px 0}
+.fim b{display:block;font-size:44px;line-height:1.1}
+@media(max-width:860px){.jogo{grid-template-columns:minmax(0,1fr)}.fig{min-height:360px}}
+</style>
+</head>
+<body>
+<div class="stripe"><i style="background:var(--blue)"></i><i style="background:var(--yel)"></i></div>
+<nav class="topo"><a href="index.html">← Voltar ao fliperama</a><span class="marca">FUNÇÕES</span></nav>
+
+<section class="band">
+  <h1>Caça-Estrelas</h1>
+  <div class="como">
+    <div>Cada fase tem <b>estrelas</b> espalhadas no plano e uma função com parâmetros (a, b, c…).</div>
+    <div>Mexa nos <b>controles</b> e veja o gráfico mudar. Cada estrela tocada pela curva acende.</div>
+    <div>Acenda <b>todas</b> para passar de fase. Dá para usar as coordenadas e calcular!</div>
+  </div>
+
+  <div class="jogo">
+    <div><div class="fig"><canvas id="cv"></canvas></div>
+      <div class="leg"><span><i style="background:var(--blue)"></i>seu gráfico</span><span style="color:#b38f00">☆ estrela a alcançar</span><span style="color:#b38f00">★ estrela alcançada</span></div></div>
+    <aside class="panel" id="painel">
+      <div class="fase"><h3 id="fNome">Fase 1</h3><span class="small" id="tempo">0:00</span></div>
+      <div class="prog" id="prog"></div>
+      <div class="formula" id="formula"></div>
+      <div id="pars"></div>
+      <div class="estado" id="estado"></div>
+      <div class="acts">
+        <button class="pri" id="bProx" disabled>Próxima fase</button>
+        <button id="bDica">Dica</button>
+        <button id="bNovo">Recomeçar</button>
+      </div>
+      <details><summary>Como calcular</summary><p id="calc" style="margin-top:8px"></p></details>
+    </aside>
+  </div>
+</section>
+
+<script>
+{
+const num=v=>(v<0?'−':'')+String(+Math.abs(v).toFixed(2)).replace('.',',');
+const sg=v=>(v<0?' − ':' + ')+String(+Math.abs(v).toFixed(2)).replace('.',',');
+
+/* Cada tipo de função: fórmula, parâmetros [mínimo, máximo, passo], valores iniciais e explicações */
+const TIPOS={
+ afim:{nome:'Função afim',f:(p,x)=>p.a*x+p.b,txt:p=>`f(x) = ${num(p.a)}x${sg(p.b)}`,
+  par:{a:[-4,4,.5],b:[-8,8,1]},ini:{a:1,b:0},estrelas:2,
+  dica:{a:'inclinação: quanto y muda quando x anda 1',b:'onde a reta corta o eixo y'},
+  calc:'Com dois pontos (x₁, y₁) e (x₂, y₂): a = (y₂ − y₁) / (x₂ − x₁). Depois b = y₁ − a·x₁.'},
+ modulo:{nome:'Função modular',f:(p,x)=>p.a*Math.abs(x-p.h)+p.k,txt:p=>`f(x) = ${num(p.a)}·|x${sg(-p.h)}|${sg(p.k)}`,
+  par:{a:[-3,3,.5],h:[-6,6,1],k:[-6,6,1]},ini:{a:1,h:0,k:0},estrelas:3,ok:p=>p.a!==0,
+  dica:{a:'abertura do “V” (negativo vira de cabeça para baixo)',h:'deslocamento horizontal do bico',k:'deslocamento vertical do bico'},
+  calc:'O bico do “V” fica no ponto (h, k). A inclinação de cada lado é a e −a.'},
+ quadratica:{nome:'Função quadrática',f:(p,x)=>p.a*x*x+p.b*x+p.c,txt:p=>`f(x) = ${num(p.a)}x²${sg(p.b)}x${sg(p.c)}`,
+  par:{a:[-2,2,.5],b:[-5,5,1],c:[-8,8,1]},ini:{a:1,b:0,c:0},estrelas:3,ok:p=>p.a!==0,
+  dica:{a:'concavidade e abertura da parábola',b:'move o vértice na diagonal',c:'onde a parábola corta o eixo y'},
+  calc:'O vértice fica em x = −b / (2a). Com três pontos dá para montar um sistema de 3 equações e achar a, b e c.'},
+ exponencial:{nome:'Função exponencial',f:(p,x)=>p.a*Math.pow(p.b,x)+p.c,txt:p=>`f(x) = ${num(p.a)}·${num(p.b)}ˣ${sg(p.c)}`,
+  par:{a:[-3,3,.5],b:[.5,3,.5],c:[-5,5,1]},ini:{a:1,b:2,c:0},estrelas:3,ok:p=>p.a!==0&&p.b!==1,
+  dica:{a:'multiplica a curva (negativo espelha)',b:'base: maior que 1 cresce, entre 0 e 1 decresce',c:'assíntota horizontal y = c'},
+  calc:'Em x = 0, f(0) = a + c. A curva se aproxima da reta y = c sem nunca tocar nela.'},
+ seno:{nome:'Função seno',f:(p,x)=>p.a*Math.sin(p.b*x)+p.c,txt:p=>`f(x) = ${num(p.a)}·sen(${num(p.b)}x)${sg(p.c)}`,
+  par:{a:[-5,5,.5],b:[.5,3,.5],c:[-4,4,1]},ini:{a:1,b:1,c:0},estrelas:4,ok:p=>p.a!==0,
+  dica:{a:'amplitude: altura da onda',b:'frequência: período = 2π / b',c:'linha do meio da onda'},
+  calc:'A onda oscila entre c − |a| e c + |a|. Em x = 0, f(0) = c. O período é 2π / b.'},
+};
+const FASES=['afim','afim','modulo','quadratica','quadratica','exponencial','seno','seno'];
+
+let aceso=[],festa=false,fase=0,alvo=null,p={},dicas=0,t0=null,fim=false,venceu=false,tTotal=0;
+const $=id=>document.getElementById(id);
+
+function sorteia(tipo){
+  const T=TIPOS[tipo];
+  for(let i=0;i<2000;i++){
+    const q={};
+    for(const[k,[mn,mx,st]] of Object.entries(T.par)){const n=Math.round((mx-mn)/st);q[k]=+(mn+st*Math.floor(Math.random()*(n+1))).toFixed(2);}
+    if(T.ok&&!T.ok(q))continue;
+    const xs=[];for(let x=-8;x<=8;x++){const y=T.f(q,x);if(Math.abs(y)<=8.5)xs.push(x);}
+    if(xs.length<T.estrelas+2)continue;
+    const pts=[];for(let j=0;j<T.estrelas;j++){const x=xs[Math.round(j*(xs.length-1)/(T.estrelas-1))];pts.push({x,y:T.f(q,x)});}
+    if(new Set(pts.map(s=>s.x)).size<pts.length)continue;
+    if(pts.every(s=>Math.abs(T.f(T.ini,s.x)-s.y)<.2))continue; // não começar já resolvido
+    return{q,pts};
+  }
+}
+function iniciaFase(){
+  const tipo=FASES[fase],T=TIPOS[tipo];alvo=sorteia(tipo);aceso=alvo.pts.map(()=>false);festa=false;p={...T.ini};venceu=false;
+  $('fNome').textContent=`Fase ${fase+1} de ${FASES.length} · ${T.nome}`;
+  $('pars').innerHTML=Object.entries(T.par).map(([k,[mn,mx,st]])=>`<div class="par"><label for="r${k}"><span>${k}</span><span id="v${k}">${num(p[k])}</span></label><input type="range" id="r${k}" min="${mn}" max="${mx}" step="${st}" value="${p[k]}"><span class="small">${T.dica[k]}</span></div>`).join('');
+  for(const k in T.par)$('r'+k).addEventListener('input',e=>{p[k]=+e.target.value;$('v'+k).textContent=num(p[k]);confere();});
+  $('calc').textContent=T.calc;
+  $('prog').innerHTML=FASES.map((_,i)=>`<i class="${i<fase?'ok':i===fase?'at':''}"></i>`).join('');
+  $('bProx').disabled=true;$('bProx').textContent=fase===FASES.length-1?'Ver resultado':'Próxima fase';
+  confere();
+}
+function acertos(){const T=TIPOS[FASES[fase]];return alvo.pts.map(s=>Math.abs(T.f(p,s.x)-s.y)<.2);}
+function confere(){
+  const T=TIPOS[FASES[fase]];$('formula').textContent=T.txt(p);
+  const h=acertos(),n=h.filter(Boolean).length;
+  venceu=n===h.length;
+  $('estado').textContent=venceu?'Todas as estrelas! Fase concluída.':`${n} de ${h.length} estrelas`;
+  $('estado').classList.toggle('win',venceu);$('bProx').disabled=!venceu;
+}
+
+/* ---------- Desenho do plano cartesiano ---------- */
+const C=$('cv'),ctx=C.getContext('2d'),fig=C.parentElement;let W=0,H=0,dpr=1;
+new ResizeObserver(()=>{dpr=devicePixelRatio||1;W=fig.clientWidth;H=fig.clientHeight;C.width=W*dpr;C.height=H*dpr;}).observe(fig);
+/* Converte uma variável de cor do CSS (ex.: --blue) numa cor que o canvas entende */
+const cssEl=document.createElement('i');cssEl.style.display='none';document.body.appendChild(cssEl);
+const css=v=>{cssEl.style.color=`var(${v})`;return getComputedStyle(cssEl).color;};
+function desenha(now){
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+  const u=Math.min(W,H)/21,ox=W/2,oy=H/2,X=x=>ox+x*u,Y=y=>oy-y*u;
+  const xm=Math.ceil(W/2/u),ym=Math.ceil(H/2/u),ink=css('--ink'),mut=css('--mut');
+  ctx.lineWidth=1;ctx.strokeStyle=css('--line');for(const passo of[1,2]){ctx.globalAlpha=passo===1?.45:1;ctx.beginPath();
+  for(let i=-xm;i<=xm;i++)if(i%passo===0){ctx.moveTo(X(i),0);ctx.lineTo(X(i),H);}
+  for(let i=-ym;i<=ym;i++)if(i%passo===0){ctx.moveTo(0,Y(i));ctx.lineTo(W,Y(i));}ctx.stroke();}ctx.globalAlpha=1;
+  ctx.strokeStyle=mut;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,oy);ctx.lineTo(W,oy);ctx.moveTo(ox,0);ctx.lineTo(ox,H);ctx.stroke();
+  ctx.fillStyle=mut;ctx.font='13px Archivo,sans-serif';ctx.textAlign='center';
+  for(let i=-xm;i<=xm;i++)if(i&&i%2===0&&X(i)>14&&X(i)<W-14)ctx.fillText(num(i),X(i),oy+17);
+  ctx.textAlign='right';for(let i=-ym;i<=ym;i++)if(i&&i%2===0)ctx.fillText(num(i),ox-7,Y(i)+4);
+  if(alvo){
+    const T=TIPOS[FASES[fase]];
+    ctx.strokeStyle=css('--blue');ctx.shadowColor=css('--blue');ctx.shadowBlur=14;ctx.lineWidth=4;ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();let on=false;
+    for(let px=0;px<=W;px+=2){const x=(px-ox)/u,y=T.f(p,x);if(!isFinite(y)||Math.abs(y)>60){on=false;continue;}
+      on?ctx.lineTo(px,Y(y)):ctx.moveTo(px,Y(y));on=true;}
+    ctx.stroke();ctx.shadowBlur=0;
+    const h=acertos(),pulse=1+.12*Math.sin(now/180);
+    alvo.pts.forEach((s,i)=>{estrela(X(s.x),Y(s.y),h[i]?18*(venceu?pulse:1):17,h[i]);
+      const t=`(${num(s.x)}; ${num(+s.y.toFixed(2))})`,lx=X(s.x)+20>W-110?X(s.x)-120:X(s.x)+20;rotulo(t,lx,Y(s.y)-18,h[i]?'#ffd23f':null);});
+    h.forEach((ok,i)=>{if(ok&&!aceso[i]){G.explode(X(alvo.pts[i].x),Y(alvo.pts[i].y),['#ffd23f','#fff','#ff8a3d'],16,3);G.pop('+1 ★',X(alvo.pts[i].x),Y(alvo.pts[i].y)-16,'#ffd23f');}aceso[i]=ok;});
+    if(venceu&&!festa){festa=true;G.pop('FASE COMPLETA!',W/2,H/2,'#39ff88');G.explode(W/2,H/2,['#39ff88','#ffd23f','#39c2ff','#ff4fd8'],60,6);}
+  }
+  G.desenhaParts(ctx);G.desenhaPops(ctx);
+  if(t0&&!fim){tTotal=performance.now()-t0;$('tempo').textContent=mmss(tTotal);}
+  requestAnimationFrame(desenha);
+}
+function rotulo(t,x,y,cor){G.rotulo(ctx,t,x,y,cor);}
+/* Estrela em pixel art: apagada (contorno) ou acesa (amarela com brilho) */
+const ESTRELA=['....y....','....y....','...yyy...','yyyywyyyy','.yyyyyyy.','..yyyyy..','..yy.yy..','.yy...yy.','.y.....y.'];
+const ESTRELA0=['....o....','....o....','...o.o...','oooo.oooo','.o.....o.','..o...o..','..o.o.o..','.oo...oo.','.o.....o.'];
+function estrela(x,y,r,cheia){if(cheia){ctx.shadowColor='#ffd23f';ctx.shadowBlur=18;}G.sprite(ctx,cheia?ESTRELA:ESTRELA0,{y:'#ffd23f',w:'#fff',o:'#b38f00'},x,y,r/4.5);ctx.shadowBlur=0;}
+const mmss=ms=>{const s=Math.floor(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
+
+/* ---------- Botões ---------- */
+$('bProx').onclick=()=>{if(!venceu)return;
+  if(fase<FASES.length-1){fase++;iniciaFase();}else terminar();};
+$('bDica').onclick=()=>{if(venceu||fim)return;const T=TIPOS[FASES[fase]];
+  const k=Object.keys(T.par).find(k=>p[k]!==alvo.q[k]);if(!k)return;
+  p[k]=alvo.q[k];$('r'+k).value=p[k];$('v'+k).textContent=num(p[k]);dicas++;confere();};
+$('bNovo').onclick=()=>{location.reload();};
+function terminar(){
+  fim=true;const pont=tTotal+dicas*15000;let rec=null;
+  try{rec=JSON.parse(localStorage.getItem('exatas-funcoes')||'null');if(!rec||pont<rec.pont){localStorage.setItem('exatas-funcoes',JSON.stringify({pont,txt:mmss(pont)}));}}catch(e){}
+  const novo=!rec||pont<rec.pont;
+  $('painel').innerHTML=`<div class="fim"><h3>Todas as ${FASES.length} fases concluídas!</h3><b>${mmss(pont)}</b><p class="small">tempo ${mmss(tTotal)} + ${dicas} dica(s) × 15 s</p><p>${novo?'Novo recorde!':'Recorde: '+rec.txt}</p><div class="acts" style="justify-content:center"><button class="pri" id="bDeNovo" style="background:var(--blue);color:#fff">Jogar de novo</button><a class="btn" href="index.html">Voltar ao hub</a></div></div>`;
+  $('bDeNovo').onclick=()=>location.reload();
+}
+iniciaFase();t0=performance.now();requestAnimationFrame(desenha);
+}
+</script>
+<script>G.tutorial('funcoes');</script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kart das Áreas</title>
+<link rel="stylesheet" href="comum.css">
+<style>
+/* VOICE: corrida de kart de fliperama: aposta, largada e chegada
+   IDEA: três karts com velocímetros gravados; vence quem tem mais área sob v(t)
+   PICTURE: gráfico neon das velocidades; pista com semáforo, karts em pixel art e bandeira quadriculada
+   COLOUR and TYPE: kart vermelho, azul e verde; Press Start 2P na largada
+   LAYOUT: gráfico + pista à esquerda, apostas à direita */
+:root{--cor:var(--green)}
+.fig{min-height:500px}
+.apostas{display:grid;gap:10px;margin-top:10px}
+.apostas button{justify-content:flex-start;gap:10px;font-size:18px;min-height:54px}
+.apostas i{width:18px;height:18px;display:inline-block;border:2px solid #000}
+.apostas button.certa{outline:3px solid var(--green)}
+.apostas button.errada{outline:3px solid var(--red)}
+</style>
+<script src="grafico.js"></script>
+<script src="tutoriais.js"></script>
+</head>
+<body>
+<div class="stripe"><i style="background:var(--red)"></i><i style="background:var(--blue)"></i><i style="background:var(--green)"></i></div>
+<nav class="topo"><a href="index.html">← Voltar ao fliperama</a><span class="marca">INTEGRAIS</span></nav>
+<section class="band">
+  <h1>Kart das Áreas</h1>
+  <div class="como">
+    <div>Veja o <b>velocímetro gravado</b> de cada kart, v(t), durante 10 segundos.</div>
+    <div>A distância é a <b>área sob o gráfico</b>: d = ∫₀¹⁰ v(t) dt. O pico mais alto nem sempre vence!</div>
+    <div>Aposte no kart que foi <b>mais longe</b> e assista à corrida.</div>
+  </div>
+  <div class="placar"><div><b id="pRod">1/8</b>corrida</div><div><b id="pPts">0</b>pontos</div><div><b id="pSeq">0</b>acertos seguidos</div></div>
+  <div class="palco">
+    <div><div class="fig"><canvas id="cv"></canvas></div></div>
+    <aside class="panel" id="painel">
+      <h3>Quem vai mais longe?</h3>
+      <div class="apostas" id="ap"></div>
+      <div class="res" id="res" style="display:none"></div>
+      <button class="pri" id="bProx" style="display:none">Próxima corrida</button>
+      <p class="small" style="margin-top:10px">Acerto: +10, mais 2 por acerto seguido.</p>
+    </aside>
+  </div>
+</section>
+<script>
+{
+const $=id=>document.getElementById(id),F=G.fmt,R=(a,b)=>a+Math.random()*(b-a),T=10;
+const TIPOS=[
+  ()=>{const c=+R(4,9).toFixed(1);return{f:()=>c,ex:`v = ${F(c,1)} (constante)`};},
+  ()=>{const a=+R(.8,1.8).toFixed(2);return{f:t=>a*t,ex:`v = ${F(a,2)}t (acelera)`};},
+  ()=>{const b=+R(10,16).toFixed(1);return{f:t=>b*(1-t/T),ex:`v = ${F(b,1)}·(1 − t/10) (freia)`};},
+  ()=>{const h=+R(8,14).toFixed(1);return{f:t=>h*Math.sin(Math.PI*t/T),ex:`v = ${F(h,1)}·sen(πt/10) (sobe e desce)`};},
+  ()=>{const k=+R(.1,.17).toFixed(3);return{f:t=>k*t*t,ex:`v = ${F(k,3)}t² (arranca tarde)`};},
+  ()=>{const h=+R(13,18).toFixed(1);return{f:t=>h*Math.exp(-((t-5)**2)/2),ex:`turbo de ${F(h,1)} m/s no meio`};},
+];
+const area=f=>{let a=0;for(let i=0;i<1000;i++)a+=f((i+.5)/100)/100;return a;};
+const CORES=['#ff4d6d','#39c2ff','#39ff88'],NOMES=['Vermelho','Azul','Verde'];
+const KART=['....hh....','...hssh...','.ccccccccc','cccccccccc','kk.cccc.kk','kk......kk'];
+let ri=0,pts=0,seq=0,carros=[],resp=false,t=0,fase='aposta',t0=0;const TOTAL=8;
+function sorteia(){for(;;){const tipos=G.emb([0,1,2,3,4,5]).slice(0,3);carros=tipos.map(i=>{const c=TIPOS[i]();c.d=area(c.f);return c;});
+  const d=carros.map(c=>c.d).sort((a,b)=>b-a);if((d[0]-d[1])/d[0]>.06&&(d[0]-d[1])/d[0]<.35)return;}}
+function nova(){sorteia();resp=false;t=0;fase='aposta';
+  $('ap').innerHTML=carros.map((c,i)=>`<button data-i="${i}"><i style="background:${CORES[i]}"></i>Kart ${NOMES[i]}</button>`).join('');
+  $('res').style.display='none';$('bProx').style.display='none';placar();}
+function placar(){$('pRod').textContent=`${ri+1}/${TOTAL}`;$('pPts').textContent=pts;$('pSeq').textContent=seq;}
+let vence=0,acerto=false;
+$('ap').addEventListener('click',e=>{const b=e.target.closest('button');if(!b||resp)return;resp=true;fase='largada';t0=performance.now();
+  vence=carros.reduce((m,c,i)=>c.d>carros[m].d?i:m,0);acerto=+b.dataset.i===vence;if(acerto){seq++;pts+=10+2*(seq-1);}else seq=0;b.classList.add('escolhido');
+  [...$('ap').children].forEach(x=>x.disabled=true);});
+function revela(){placar();
+  [...$('ap').children].forEach((x,i)=>{x.classList.toggle('certa',i===vence);if(x.classList.contains('escolhido')&&!acerto)x.classList.add('errada');x.innerHTML+=` <span class="small" style="margin-left:auto">${F(carros[i].d,1)} m</span>`;});
+  $('res').className='res'+(acerto?'':' err');
+  $('res').innerHTML=`<b>${acerto?'Acertou!':'Não foi dessa vez.'}</b> O kart ${NOMES[vence]} percorreu ${F(carros[vence].d,1)} m, a maior área sob o gráfico.<br>${carros.map((c,i)=>`${NOMES[i]}: ${c.ex}`).join('<br>')}`;
+  $('res').style.display='block';$('bProx').textContent=ri<TOTAL-1?'Próxima corrida':'Ver resultado';$('bProx').style.display='inline-flex';}
+$('bProx').onclick=()=>{if(ri<TOTAL-1){ri++;nova();}else{const r=G.recorde('exatas-corrida',pts);G.fim($('painel'),{titulo:'Fim do campeonato!',valor:pts,detalhe:'pontos',rec:r});}};
+const s=G.tela($('cv'));let ult=0;
+G.loop(now=>{const dt=Math.min(.05,(now-(ult||now))/1000);ult=now;
+  if(fase==='largada'&&now-t0>2400){fase='correndo';}
+  if(fase==='correndo'){t=Math.min(T,t+dt*2.2);if(t>=T){fase='fim';revela();}}
+  desenha(now);});
+function desenha(now){
+  s.limpa();if(!s.W||!carros.length)return;const c=s.ctx,W=s.W,H=s.H,pistaH=150;
+  c.fillStyle='#0b0920';c.fillRect(0,0,W,H);
+  const vmax=Math.max(...carros.flatMap(k=>Array.from({length:101},(_,i)=>k.f(i/10))));
+  const p=G.plano(s,{x0:0,x1:T,y0:0,y1:vmax*1.15},{mB:34+pistaH});
+  G.grade(p,{tx:'t (s)',ty:'velocidade (m/s)'});
+  // área já percorrida por cada kart
+  if(fase!=='aposta'){carros.forEach((k,i)=>{c.save();c.globalAlpha=.18;c.fillStyle=CORES[i];c.beginPath();c.moveTo(p.X(0),p.Y(0));for(let j=0;j<=100;j++){const tm=t*j/100;c.lineTo(p.X(tm),p.Y(k.f(tm)));}c.lineTo(p.X(t),p.Y(0));c.fill();c.restore();});
+    c.strokeStyle='#fff';c.lineWidth=1.5;c.beginPath();c.moveTo(p.X(t),p.mT);c.lineTo(p.X(t),p.Y(0));c.stroke();}
+  carros.forEach((k,i)=>G.curva(p,k.f,CORES[i],3.5,{brilho:8}));
+  // pista
+  const y0=H-pistaH,dmax=Math.max(...carros.map(k=>k.d)),X=d=>56+d/dmax*(W-120);
+  c.fillStyle='#2a2a3a';c.fillRect(0,y0,W,pistaH);c.fillStyle='#fff';for(let x=0;x<W;x+=40)c.fillRect(x+((fase==='correndo')?-(now/4)%40:0),y0+pistaH/2-1,20,2);
+  c.fillStyle='#ff4d6d';for(let x=0;x<W;x+=16){c.fillRect(x,y0,8,6);c.fillRect(x+8,y0+pistaH-6,8,6);}c.fillStyle='#fff';for(let x=8;x<W;x+=16){c.fillRect(x,y0,8,6);c.fillRect(x-8,y0+pistaH-6,8,6);}
+  // bandeira quadriculada na chegada do vencedor
+  const xf=X(dmax)+26;for(let j=0;j<pistaH/10;j++)for(let i=0;i<2;i++){c.fillStyle=(i+j)%2?'#000':'#fff';c.fillRect(xf+i*8,y0+6+j*10,8,10);}
+  carros.forEach((k,i)=>{let d=0;for(let j=0;j<200;j++)d+=k.f((j+.5)*t/200)*t/200;const y=y0+30+i*42;
+    G.sprite(c,KART,{h:'#ffd23f',s:'#ffcf9e',c:CORES[i],k:'#111'},X(d),y,4);G.arcade(c,F(d,0)+' m',8,y+5,CORES[i],9,'left');
+    if(fase==='fim'&&i===vence)G.arcade(c,'1º',X(d)+30,y-10,'#ffd23f',12);});
+  // semáforo de largada
+  if(fase==='largada'){const k=Math.floor((now-t0)/600);c.fillStyle='rgba(0,0,0,.6)';c.fillRect(0,0,W,y0);
+    for(let i=0;i<3;i++)G.ponto(c,W/2-60+i*60,y0/2,22,k>i?(k>=3?'#39ff88':'#ff4d6d'):'#333','#000',3);
+    G.arcade(c,k>=3?'VAI!':String(3-k),W/2,y0/2+70,'#ffd23f',18);}
+  if(fase==='aposta')G.arcade(c,'FAÇA SUA APOSTA',W/2,y0+pistaH/2+6,'#ffd23f',12);
+}
+nova();
+}
+</script>
+<script>G.tutorial('corrida');</script>
+</body>
+</html>

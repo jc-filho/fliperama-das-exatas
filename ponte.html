@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ponte sobre a Lava</title>
+<link rel="stylesheet" href="comum.css">
+<style>
+/* VOICE: aventura de caverna em pixel art, tensa e divertida
+   IDEA: a ponte é o gráfico de f; num ponto ela quebrou e a tábua tem de ficar na altura do limite
+   PICTURE: caverna, rio de lava animado, ponte de madeira, explorador de chapéu atravessando
+   COLOUR and TYPE: lava laranja e vermelha, madeira marrom, tábua amarela; Press Start 2P nos avisos
+   LAYOUT: cenário à esquerda, tábua e decisão à direita */
+:root{--cor:var(--org)}
+.fig{min-height:480px}
+</style>
+<script src="grafico.js"></script>
+<script src="tutoriais.js"></script>
+</head>
+<body>
+<div class="stripe"><i style="background:var(--red)"></i><i style="background:var(--org)"></i><i style="background:var(--yel)"></i></div>
+<nav class="topo"><a href="index.html">← Voltar ao fliperama</a><span class="marca">LIMITES</span></nav>
+<section class="band">
+  <h1>Ponte sobre a Lava</h1>
+  <div class="como">
+    <div>A ponte é o <b>gráfico de f</b>. Ela quebrou em <b>x = a</b>, porque f(a) não existe.</div>
+    <div>Ajuste a <b>tábua</b> para a altura do <b>limite</b> de f(x) quando x → a, e mande o explorador atravessar.</div>
+    <div>Se os dois lados não se encontram (salto ou assíntota), aperte <b>Não tem conserto</b>.</div>
+  </div>
+  <div class="placar"><div><b id="pQ">1/8</b>ponte</div><div><b id="pPts">0</b>pontos</div><div><b id="pVid">♥♥♥</b>vidas</div></div>
+  <div class="palco">
+    <div><div class="fig"><canvas id="cv"></canvas></div>
+      <div class="leg"><span><i style="background:#a8672f;height:8px"></i>ponte: f(x)</span><span><i style="background:var(--yel);height:8px"></i>sua tábua</span><span><i style="background:var(--red)"></i>buraco em x = a</span></div></div>
+    <aside class="panel" id="painel">
+      <p class="grande" id="fx" style="color:var(--org)"></p>
+      <div class="par"><label for="h"><span>Altura da tábua</span><span id="hTxt"></span></label><input type="range" id="h"></div>
+      <div class="acts"><button class="pri" id="bVai">Atravessar!</button><button id="bNao">Não tem conserto</button></div>
+      <div class="res" id="res" style="display:none"></div>
+      <button class="pri" id="bProx" style="display:none">Próxima ponte</button>
+    </aside>
+  </div>
+</section>
+<script>
+{
+const $=id=>document.getElementById(id),F=G.fmt;
+const BANCO=[
+  {ex:'f(x) = (x² − 4)/(x − 2), a = 2',f:x=>(x*x-4)/(x-2),a:2,L:4,v:[-1,5,-1,7],st:.25,pq:'Fatorando: x + 2 → 4.'},
+  {ex:'f(x) = sen(x)/x, a = 0',f:x=>Math.sin(x)/x,a:0,L:1,v:[-8,8,-.6,1.6],st:.05,pq:'Limite trigonométrico fundamental: 1.'},
+  {ex:'f(x) = (x² − 1)/(x − 1), a = 1',f:x=>(x*x-1)/(x-1),a:1,L:2,v:[-2,4,-1,5],st:.25,pq:'(x − 1)(x + 1)/(x − 1) = x + 1 → 2.'},
+  {ex:'f(x) = (√x − 1)/(x − 1), a = 1',f:x=>(Math.sqrt(x)-1)/(x-1),a:1,L:.5,v:[0,4,0,1.2],st:.05,pq:'Pelo conjugado: 1/(√x + 1) → 1/2.'},
+  {ex:'f(x) = (eˣ − 1)/x, a = 0',f:x=>(Math.exp(x)-1)/x,a:0,L:1,v:[-3,3,-.5,4],st:.05,pq:'Limite fundamental: 1.'},
+  {ex:'f(x) = (x³ − 8)/(x − 2), a = 2',f:x=>(x**3-8)/(x-2),a:2,L:12,v:[0,3.6,0,20],st:.5,pq:'x³ − 8 = (x − 2)(x² + 2x + 4), então o limite é 4 + 4 + 4 = 12.'},
+  {ex:'f(x) = |x|/x, a = 0',f:x=>Math.abs(x)/x,a:0,L:null,v:[-3,3,-2,2],st:.25,pq:'Pela esquerda vale −1 e pela direita vale 1: é um salto. Nenhuma tábua liga os dois lados.'},
+  {ex:'f(x) = x + 1 (x < 1) e 4 − x (x > 1), a = 1',f:x=>x<1?x+1:4-x,a:1,L:null,v:[-2,4,-1,5],st:.25,pq:'Pela esquerda vai para 2 e pela direita para 3. Limites laterais diferentes: não tem conserto.'},
+  {ex:'f(x) = 1/(x − 1)², a = 1',f:x=>1/(x-1)**2,a:1,L:null,v:[-2,4,-1,10],st:.25,pq:'Os dois lados vão para +∞ (assíntota vertical). Não existe altura finita para a tábua.'},
+];
+const EXP=['..hhhh..','.hhhhhh.','hhhhhhhh','..ssss..','..skks..','..ssss..','.gggggg.','.gggggg.','..bbbb..','..b..b..','.bb..bb.'];
+const EXP2=['..hhhh..','.hhhhhh.','hhhhhhhh','..ssss..','..skks..','..ssss..','.gggggg.','.gggggg.','..bbbb..','.b....b.','bb....bb'];
+const PALE={h:'#8b5a2b',s:'#ffcf9e',k:'#000',g:'#3d8b5a',b:'#3b2a6e'};
+const TOTAL=8;let lista=G.emb(BANCO).slice(0,TOTAL),qi=0,pts=0,vidas=3,q=null,anim=null,resp=false,p=null,splash=false;
+function nova(){q=lista[qi];resp=false;anim=null;splash=false;const h=$('h');h.min=q.v[2];h.max=q.v[3];h.step=q.st;h.value=q.v[2]+Math.round((q.v[3]-q.v[2])*.15/q.st)*q.st;h.disabled=false;
+  $('fx').textContent=q.ex;$('res').style.display='none';$('bProx').style.display='none';$('bVai').disabled=false;$('bNao').disabled=false;ht();placar();}
+const ht=()=>$('hTxt').textContent=F(+$('h').value,2);
+function placar(){$('pQ').textContent=`${qi+1}/${TOTAL}`;$('pPts').textContent=pts;$('pVid').textContent='♥'.repeat(vidas)+'♡'.repeat(3-vidas);}
+$('h').addEventListener('input',ht);
+function decide(nao){if(resp)return;resp=true;$('bVai').disabled=true;$('bNao').disabled=true;$('h').disabled=true;
+  const h=+$('h').value,ok=nao?q.L===null:(q.L!==null&&Math.abs(h-q.L)<q.st/2);anim={t:0,ok,nao};
+  setTimeout(()=>{if(ok)pts+=10;else vidas--;placar();
+    if(nao&&p)G.pop(ok?'ISSO MESMO!':'TINHA CONSERTO!',s.W/2,s.H*.3,ok?'#39ff88':'#ff4d6d');
+    $('res').className='res'+(ok?'':' err');
+    $('res').innerHTML=`<b>${ok?(nao?'Isso! Não tem conserto.':'Passou!'):'Ops!'}</b> ${q.L===null?'':'O limite é '+F(q.L,2)+'. '}${q.pq}`;$('res').style.display='block';
+    $('bProx').textContent=vidas===0||qi===TOTAL-1?'Ver resultado':'Próxima ponte';$('bProx').style.display='inline-flex';},nao?300:2700);}
+$('bVai').onclick=()=>decide(false);$('bNao').onclick=()=>decide(true);
+$('bProx').onclick=()=>{if(vidas===0||qi===TOTAL-1){const r=G.recorde('exatas-ponte',pts);G.fim($('painel'),{titulo:vidas?'Todas as pontes!':'GAME OVER',valor:pts,detalhe:'pontos',rec:r});return;}qi++;nova();};
+const s=G.tela($('cv'));let ult=0;
+G.loop(now=>{const dt=Math.min(.05,(now-(ult||now))/1000);ult=now;if(anim&&!anim.nao)anim.t+=dt;desenha(now);});
+function ponteSeg(c,a,b){ // ponte de madeira entre x = a e x = b
+  const pts=[];for(let px=p.X(a);px<=p.X(b);px+=2){const x=p.xi(px),y=q.f(x);if(isFinite(y)&&y>p.y0-5&&y<p.y1+5)pts.push([px,p.Y(y)]);}
+  if(pts.length<2)return;
+  c.strokeStyle='#5c3a1a';c.lineWidth=12;c.lineCap='butt';c.beginPath();pts.forEach(([x,y],i)=>i?c.lineTo(x,y):c.moveTo(x,y));c.stroke();
+  c.strokeStyle='#a8672f';c.lineWidth=8;c.stroke();
+  c.strokeStyle='#3b2412';c.lineWidth=2;for(let i=0;i<pts.length;i+=6){const[x,y]=pts[i];c.beginPath();c.moveTo(x,y-5);c.lineTo(x,y+5);c.stroke();}
+  c.strokeStyle='#d9b38c';c.lineWidth=1.5;c.beginPath();pts.forEach(([x,y],i)=>i?c.lineTo(x,y-16):c.moveTo(x,y-16));c.stroke();
+  for(let i=0;i<pts.length;i+=24){const[x,y]=pts[i];c.beginPath();c.moveTo(x,y-16);c.lineTo(x,y);c.stroke();}}
+function desenha(now){
+  s.limpa();if(!s.W||!q)return;const c=s.ctx,W=s.W,H=s.H,[x0,x1,y0,y1]=q.v,gap=(x1-x0)*.035;
+  // caverna
+  const bg=c.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#120a1f');bg.addColorStop(.7,'#2a0f1a');bg.addColorStop(1,'#5a1408');c.fillStyle=bg;c.fillRect(0,0,W,H);
+  c.fillStyle='#1d1030';for(let i=0;i<14;i++){const x=i*W/13,h=20+((i*37)%40);c.beginPath();c.moveTo(x-18,0);c.lineTo(x,h);c.lineTo(x+18,0);c.fill();}
+  p=G.plano(s,{x0,x1,y0,y1},{mB:56});
+  // grade discreta
+  c.save();c.globalAlpha=.45;G.grade(p,{pula:x=>Math.abs(x-q.a)<(x1-x0)*.05});c.restore();
+  // lava animada
+  const ly=H-48;c.fillStyle='#ff4d1a';c.beginPath();c.moveTo(0,H);for(let x=0;x<=W;x+=6)c.lineTo(x,ly+5*Math.sin(x/30+now/300));c.lineTo(W,H);c.fill();
+  c.fillStyle='#ffd23f';for(let x=0;x<W;x+=40){const y=ly+10+4*Math.sin(x+now/200);c.fillRect(x+((now/30)%40),y,8,3);}
+  // ponte (dois pedaços) e o buraco
+  ponteSeg(c,x0,q.a-gap);ponteSeg(c,q.a+gap,x1);
+  c.strokeStyle='rgba(255,77,109,.8)';c.setLineDash([5,5]);c.lineWidth=2;c.beginPath();c.moveTo(p.X(q.a),p.mT);c.lineTo(p.X(q.a),ly);c.stroke();c.setLineDash([]);
+  G.arcade(c,'x = '+F(q.a),p.X(q.a),ly-8,'#ff4d6d',9);
+  // tábua
+  const h=+$('h').value,xa=p.X(q.a-gap*1.25),xb=p.X(q.a+gap*1.25);c.fillStyle='#ffd23f';c.fillRect(xa,p.Y(h)-5,xb-xa,10);c.fillStyle='#b38f00';c.fillRect(xa,p.Y(h)+2,xb-xa,3);
+  G.rotulo(c,'tábua: '+F(h,2),xb+8,p.Y(h),'#ffd23f');
+  // explorador
+  let X=p.X(x0+(x1-x0)*.05),Y=p.Y(q.f(x0+(x1-x0)*.05)),passo=0;
+  if(anim&&!anim.nao){const xs=x0+(x1-x0)*.05,dur=2.4,k=Math.min(1,anim.t/dur);let x=xs+(x1-x0)*.9*k,y;
+    if(anim.ok){y=Math.abs(x-q.a)<=gap*1.25?h:q.f(x);if(k>=1&&!splash){splash=true;G.pop('PASSOU!',p.X(x),p.Y(y)-50,'#39ff88');G.explode(p.X(x),p.Y(y)-30,['#ffd23f','#39ff88'],24,3);}}
+    else{const xq=q.a-gap*1.25;if(x<xq)y=q.f(x);else{const tq=(x-xq)/((x1-x0)*.9/dur);x=xq+.3*tq;y=q.f(xq)-9*tq*tq*(y1-y0)/4;}
+      if(p.Y(y)>ly&&!splash){splash=true;G.explode(p.X(x),ly,['#ff4d1a','#ffd23f','#ff8a3d'],40,5);G.pop('AAAH!',p.X(x),ly-30,'#ff4d6d');}}
+    X=p.X(x);Y=Math.min(ly+20,p.Y(y));passo=Math.floor(now/140)%2;}
+  if(!(splash&&anim&&!anim.ok))G.sprite(c,passo?EXP2:EXP,PALE,X,Y-24,3.2);
+  G.desenhaParts(c);G.desenhaPops(c);
+}
+nova();
+}
+</script>
+<script>G.tutorial('ponte');</script>
+</body>
+</html>

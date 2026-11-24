@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cubo Mágico 3D</title>
+<link rel="stylesheet" href="comum.css">
+<script src="grafico.js"></script>
+<script src="tutoriais.js"></script>
+<style>
+/* VOICE: lúdico mas preciso — um brinquedo que mostra a sua matemática
+   IDEA: o próprio cubo como bancada de laboratório de álgebra linear
+   PICTURE: o cubo 3D grande, girável, com a matriz de cada movimento ao lado
+   COLOUR and TYPE: cores oficiais do cubo (vermelho, azul, verde, amarelo) sobre branco/grafite; Archivo
+   LAYOUT: título curto, cubo + painel de matriz, controles, depois os conceitos */
+.main{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:22px;margin-top:18px}
+.fig{min-height:460px;background:radial-gradient(circle at 50% 42%,#2a2160,#07061a 70%);touch-action:none;cursor:grab}
+.fig canvas{position:absolute;inset:0;width:100%;height:100%}
+.hint{position:absolute;left:14px;bottom:10px;font-size:13px;color:var(--mut);pointer-events:none}
+.badge{position:absolute;right:14px;top:12px;font:10px/1.4 var(--pixel);padding:8px 10px;background:#000;border:3px solid var(--line);z-index:1}
+.badge.ok{background:var(--green);color:#000;border-color:#000}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.stats div{background:var(--bg);border-radius:12px;padding:8px 10px;border:1px solid var(--line)}
+.stats b{display:block;font:16px/1.4 var(--pixel);color:var(--yel)}
+.stats span{font-size:13px;color:var(--mut)}
+.mx{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0}
+.mat{display:inline-grid;grid-template-columns:repeat(3,auto);gap:2px 12px;padding:6px 10px;border-left:2px solid var(--ink);border-right:2px solid var(--ink);border-radius:6px;font-weight:600;text-align:right}
+.vec{display:inline-grid;gap:2px;padding:6px 8px;border-left:2px solid var(--ink);border-right:2px solid var(--ink);border-radius:6px;font-weight:600;text-align:right}
+.eq{font-weight:800;font-size:18px}
+.small{font-size:13px;color:var(--mut)}
+.seq{font-weight:600;word-break:break-word;min-height:1.5em}
+.ctrl{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:22px;margin-top:22px}
+.moves{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.mv{display:flex;flex-direction:column;align-items:center;line-height:1.1;gap:2px}
+.mv small{font-size:13px;font-weight:400;color:var(--mut)}
+.mv i{width:14px;height:5px;border-radius:3px;display:block}
+.ctrl .acts{margin-top:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.acts .pri{background:var(--red);color:#000;border-color:#000}
+.acts .sec{background:var(--blue);color:#000;border-color:#000}
+.acts .wide{grid-column:1/-1}
+.keys{margin-top:10px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:14px}
+.card{background:var(--card);border-radius:4px;padding:16px;border:3px solid var(--line);box-shadow:5px 5px 0 #000}
+.card .f{font-weight:800;font-size:17px;margin:8px 0;color:var(--blue)}
+.card p{font-size:15.5px}
+
+footer{color:var(--mut);font-size:13px}
+@media(max-width:860px){.main,.ctrl{grid-template-columns:minmax(0,1fr)}.fig{min-height:360px}}
+@media(max-width:600px){.moves{grid-template-columns:repeat(4,minmax(0,1fr))}.fig{min-height:320px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="stripe"><i style="background:var(--red)"></i><i style="background:var(--blue)"></i><i style="background:var(--green)"></i><i style="background:var(--yel)"></i><i style="background:#ff5800"></i></div>
+<nav class="topo"><a href="index.html">← Voltar ao fliperama</a><span class="marca">ÁLGEBRA LINEAR</span></nav>
+
+<section class="band">
+  <h1>Cubo Mágico: Speedrun</h1>
+  <div class="como">
+    <div><b>Embaralhe</b> o cubo e arraste a tela para girar a câmera.</div>
+    <div>Gire as faces pelos botões ou pelo teclado (U D R L F B; com Shift, anti-horário). O cronômetro começa no 1º giro.</div>
+    <div>Cada giro é uma <b>matriz de rotação</b> aplicada aos vetores das peças. Veja a matriz no painel!</div>
+  </div>
+
+  <div class="main">
+    <div class="fig" id="fig">
+      <canvas id="cv"></canvas>
+      <div class="badge" id="badge">Resolvido</div>
+      <div class="hint">Arraste para girar a câmera</div>
+    </div>
+
+    <aside class="panel">
+      <div class="stats">
+        <div><b id="sMoves">0</b><span>movimentos</span></div>
+        <div><b id="sTime">0:00</b><span>tempo</span></div>
+        <div><b id="sHist">0</b><span>no histórico</span></div>
+      </div>
+      <h3>Último movimento: <span id="mName">—</span></h3>
+      <p class="small" id="mDesc">Faça um giro para ver a matriz de rotação usada.</p>
+      <div class="mx">
+        <span class="eq">R =</span><div class="mat" id="mR"></div>
+      </div>
+      <div class="mx" id="mEx"></div>
+      <p class="small" id="mProp">det(R) = 1 · Rᵀ = R⁻¹</p>
+      <h3 style="margin-top:14px">Matriz da câmera V = Rx(φ)·Ry(θ)</h3>
+      <div class="mx"><span class="eq">V =</span><div class="mat" id="mV"></div></div>
+      <h3 style="margin-top:14px">Sequência</h3>
+      <div class="seq" id="seq">—</div>
+    </aside>
+  </div>
+
+  <div class="ctrl">
+    <div>
+      <h3>Girar faces</h3>
+      <div class="moves" id="moves"></div>
+      <p class="small keys">Teclado: U D R L F B giram as faces; X Y Z viram o cubo inteiro; com Shift, anti-horário (′). Ctrl+Z desfaz.</p>
+    </div>
+    <div>
+      <h3>Ações</h3>
+      <div class="acts">
+        <button class="pri" id="bScr">Embaralhar</button>
+        <button class="sec" id="bSol">Resolver</button>
+        <button id="bUndo">Desfazer</button>
+        <button id="bReset">Reiniciar</button>
+        <button class="wide" id="bDemo">Demonstração: (R·U) repetido 105 vezes</button>
+      </div>
+      <p class="small" id="msg" style="margin-top:10px">“Resolver” aplica as matrizes inversas na ordem contrária.</p>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <h2>Onde está a álgebra linear</h2>
+  <div class="cards" id="cards"></div>
+</section>
+
+<section class="band"><footer>Projeto de Álgebra Linear — Engenharia de Software · Cores: branco (cima), amarelo (baixo), verde (frente), azul (trás), vermelho (direita), laranja (esquerda).</footer></section>
+
+<script>
+{
+const COL={U:'#f4f1ff',D:'#ffd23f',F:'#39ff88',B:'#39c2ff',R:'#ff4d6d',L:'#ff8a3d'};
+const DIRS=[[0,1,0,'U'],[0,-1,0,'D'],[0,0,1,'F'],[0,0,-1,'B'],[1,0,0,'R'],[-1,0,0,'L']];
+const NAMES={U:'Cima',D:'Baixo',R:'Direita',L:'Esquerda',F:'Frente',B:'Trás',x:'Virar p/ cima',y:'Virar p/ esquerda',z:'Tombar p/ direita'};
+// face: [índice do eixo, camada, sinal do quarto de volta horário]
+const MOVES={U:[1,1,-1],D:[1,-1,1],R:[0,1,-1],L:[0,-1,1],F:[2,1,-1],B:[2,-1,1],x:[0,null,-1],y:[1,null,-1],z:[2,null,-1]};
+const naCamada=(c,m)=>m.L===null||c.p[m.ai]===m.L;
+const AX=['x','y','z'];
+
+/* ---------- Álgebra linear básica ---------- */
+const I3=()=>[[1,0,0],[0,1,0],[0,0,1]];
+const mul=(A,B)=>A.map(r=>[0,1,2].map(j=>r[0]*B[0][j]+r[1]*B[1][j]+r[2]*B[2][j]));
+const mv=(A,v)=>A.map(r=>r[0]*v[0]+r[1]*v[1]+r[2]*v[2]);
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const add=(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]];
+const sc=(a,k)=>[a[0]*k,a[1]*k,a[2]*k];
+const tr=A=>[0,1,2].map(i=>[0,1,2].map(j=>A[j][i]));
+const rnd=A=>A.map(r=>r.map(x=>Math.round(x)+0));
+function rot(ax,t){const c=Math.cos(t),s=Math.sin(t);
+  if(ax===0)return[[1,0,0],[0,c,-s],[0,s,c]];
+  if(ax===1)return[[c,0,s],[0,1,0],[-s,0,c]];
+  return[[c,-s,0],[s,c,0],[0,0,1]];}
+const det=A=>A[0][0]*(A[1][1]*A[2][2]-A[1][2]*A[2][1])-A[0][1]*(A[1][0]*A[2][2]-A[1][2]*A[2][0])+A[0][2]*(A[1][0]*A[2][1]-A[1][1]*A[2][0]);
+
+/* ---------- Estado do cubo: 26 peças, cada uma com posição p e orientação O ---------- */
+let cubies=[];
+function build(){cubies=[];
+  for(let x=-1;x<=1;x++)for(let y=-1;y<=1;y++)for(let z=-1;z<=1;z++){
+    if(!x&&!y&&!z)continue;
+    cubies.push({p:[x,y,z],O:I3(),faces:DIRS.map(d=>({n:[d[0],d[1],d[2]],col:(x*d[0]+y*d[1]+z*d[2])===1?COL[d[3]]:null}))});
+  }}
+build();
+
+const C=document.getElementById('cv'),ctx=C.getContext('2d'),fig=document.getElementById('fig');
+let yaw=-0.62,pitch=0.5;const D=9;
+let queue=[],cur=null,hist=[],count=0,scrambled=false,t0=null,elapsed=0,timing=false;
+
+function solved(){const m={};
+  for(const c of cubies)for(const f of c.faces){if(!f.col)continue;
+    const k=mv(c.O,f.n).join(',');if(m[k]&&m[k]!==f.col)return false;m[k]=f.col;}
+  return true;}
+
+function enqueue(f,prime,opt={}){queue.push({f,prime,fast:!!opt.fast,rec:opt.rec!==false,user:!!opt.user});}
+function startNext(now){
+  if(cur||!queue.length)return;
+  const m=queue.shift(),[ai,L,q0]=MOVES[m.f],q=m.prime?-q0:q0;
+  cur={...m,ai,L,q,t0:now,dur:m.fast?75:230};
+  if(m.rec)hist.push({f:m.f,prime:m.prime});
+  if(m.user&&scrambled&&!timing&&!solved()){timing=true;t0=performance.now()-elapsed;}
+  count++;showMove(cur);
+}
+function commit(){
+  const R=rnd(rot(cur.ai,cur.q*Math.PI/2));
+  for(const c of cubies)if(naCamada(c,cur)){c.p=mv(R,c.p).map(Math.round);c.O=rnd(mul(R,c.O));}
+  cur=null;
+  if(!queue.length&&solved()){if(timing){timing=false;let rec=0;try{rec=+(localStorage.getItem('exatas-cubo')||0);if(!rec||elapsed<rec)localStorage.setItem('exatas-cubo',Math.round(elapsed));}catch(e){}msg((!rec||elapsed<rec)?'Resolvido! Novo recorde de tempo.':'Resolvido! Parabéns.');}scrambled=false;}
+  stats();
+}
+
+/* ---------- Painel de matrizes ---------- */
+const fm=x=>{x=Math.abs(x)<5e-4?0:x;return(x<0?'−':'')+Math.abs(x).toFixed(Number.isInteger(x)?0:2)};
+const matH=A=>A.flat().map(x=>`<span>${fm(x)}</span>`).join('');
+const vecH=v=>`<div class="vec">${v.map(x=>`<span>${fm(x)}</span>`).join('')}</div>`;
+function showMove(m){
+  const R=rnd(rot(m.ai,m.q*Math.PI/2));
+  const nm=m.f+(m.prime?'′':'');
+  document.getElementById('mName').textContent=nm+' ('+NAMES[m.f]+(m.prime?', anti-horário':', horário')+')';
+  document.getElementById('mDesc').textContent=`Rotação de ${m.q>0?'+':'−'}90° em torno do eixo ${AX[m.ai]}, aplicada ${m.L===null?'às 26 peças (o cubo inteiro vira)':`às 9 peças com ${AX[m.ai]} = ${m.L}`}.`;
+  document.getElementById('mR').innerHTML=matH(R);
+  const c=cubies.find(c=>naCamada(c,m)&&c.p.filter(v=>v!==0).length===3);
+  document.getElementById('mEx').innerHTML=`<span class="eq">R ·</span>${vecH(c.p)}<span class="eq">=</span>${vecH(mv(R,c.p))}<span class="small">uma quina mudando de lugar</span>`;
+  document.getElementById('mProp').textContent=`det(R) = ${det(R)} · Rᵀ·R = I, então Rᵀ = R⁻¹ (o movimento ${m.f}${m.prime?'':'′'} desfaz este)`;
+  const s=hist.slice(-14).map(h=>h.f+(h.prime?'′':'')).join(' ');
+  document.getElementById('seq').textContent=(hist.length>14?'… ':'')+(s||'—');
+}
+let lastV='';
+function showV(V){const h=matH(V);if(h!==lastV){document.getElementById('mV').innerHTML=h;lastV=h;}}
+function stats(){
+  document.getElementById('sMoves').textContent=count;
+  document.getElementById('sHist').textContent=hist.length;
+  const b=document.getElementById('badge'),ok=solved()&&!cur&&!queue.length;
+  b.textContent=ok?'Resolvido':'Embaralhado';b.classList.toggle('ok',ok);
+}
+function msg(t){document.getElementById('msg').textContent=t;}
+
+/* ---------- Desenho: rotação, produto escalar e projeção perspectiva ---------- */
+let W=0,H=0,dpr=1;
+new ResizeObserver(()=>{dpr=devicePixelRatio||1;W=fig.clientWidth;H=fig.clientHeight;C.width=W*dpr;C.height=H*dpr;}).observe(fig);
+const ease=k=>k<.5?2*k*k:1-((-2*k+2)**2)/2;
+function proj(v){const f=Math.min(W,H)*1.45,k=f/(D-v[2]);return[W/2+v[0]*k,H/2-v[1]*k];}
+function tang(n){const k=n[0]?0:n[1]?1:2,u=[0,0,0],v=[0,0,0];u[(k+1)%3]=1;v[(k+2)%3]=1;return[u,v];}
+
+function frame(now){
+  startNext(now);
+  let A=null;
+  if(cur){const k=Math.min(1,(now-cur.t0)/cur.dur);A=rot(cur.ai,cur.q*Math.PI/2*ease(k));
+    if(k>=1){commit();A=null;startNext(now);if(cur)A=rot(cur.ai,0);}}
+  const V=mul(rot(0,pitch),rot(1,yaw));showV(V);
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+  // sombra
+  const sh=proj(mv(V,[0,-2.6,0]));ctx.fillStyle='rgba(0,0,0,.13)';ctx.beginPath();ctx.ellipse(sh[0],sh[1]+8,Math.min(W,H)*.26,Math.min(W,H)*.05,0,0,7);ctx.fill();
+  const groups=[[],[]];
+  for(const c of cubies){
+    const inL=!!(cur&&naCamada(c,cur));
+    const P=inL?mv(A,c.p):c.p,M=inL?mul(A,c.O):c.O;
+    for(const f of c.faces){
+      let show=!!f.col;
+      if(!show&&cur&&cur.L!==null){const s=Math.sign(cur.L),n0=mv(c.O,f.n)[cur.ai];
+        if(inL&&n0===-s)show=true;else if(!inL&&c.p[cur.ai]===cur.L-s&&n0===s)show=true;}
+      if(!show)continue;
+      const nw=mv(M,f.n),cw=add(P,sc(nw,.5)),nv=mv(V,nw),cv=mv(V,cw);
+      if(dot(nv,[-cv[0],-cv[1],D-cv[2]])<=0)continue; // face de costas para a câmera
+      const[u,v]=tang(f.n),pts=[[1,1],[1,-1],[-1,-1],[-1,1]].map(([a,b])=>proj(mv(V,add(P,mv(M,add(sc(f.n,.5),add(sc(u,a*.5),sc(v,b*.5))))))));
+      groups[inL?1:0].push({pts,col:f.col});
+    }
+  }
+  let order=[groups[0]];
+  if(cur&&cur.L===null)order=[groups[1]];else if(cur){const camW=mv(tr(V),[0,0,D]),s=Math.sign(cur.L);order=camW[cur.ai]*s>.5?[groups[0],groups[1]]:[groups[1],groups[0]];}
+  ctx.lineJoin='round';
+  for(const g of order)for(const q of g){
+    poly(q.pts,'#101114',2.5);
+    if(q.col){const cx=q.pts.reduce((s,p)=>s+p[0],0)/4,cy=q.pts.reduce((s,p)=>s+p[1],0)/4;
+      poly(q.pts.map(p=>[cx+(p[0]-cx)*.84,cy+(p[1]-cy)*.84]),q.col,3);}
+  }
+  if(timing)elapsed=performance.now()-t0;
+  const s=Math.floor(elapsed/1000);document.getElementById('sTime').textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+  requestAnimationFrame(frame);
+}
+function poly(p,col,lw){ctx.beginPath();ctx.moveTo(p[0][0],p[0][1]);for(let i=1;i<4;i++)ctx.lineTo(p[i][0],p[i][1]);ctx.closePath();ctx.fillStyle=col;ctx.strokeStyle=col;ctx.lineWidth=lw;ctx.fill();ctx.stroke();}
+
+/* ---------- Controles ---------- */
+let drag=null;
+fig.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY];fig.setPointerCapture(e.pointerId);fig.style.cursor='grabbing';});
+fig.addEventListener('pointermove',e=>{if(!drag)return;yaw+=(e.clientX-drag[0])*.01;pitch=Math.max(-1.45,Math.min(1.45,pitch+(e.clientY-drag[1])*.01));drag=[e.clientX,e.clientY];});
+const end=()=>{drag=null;fig.style.cursor='grab';};
+fig.addEventListener('pointerup',end);fig.addEventListener('pointercancel',end);
+
+const mvEl=document.getElementById('moves');
+mvEl.innerHTML=['U','D','R','L','F','B','x','y','z'].flatMap(f=>[false,true].map(p=>
+  `<button class="mv" data-f="${f}" data-p="${p?1:0}" title="${NAMES[f]} ${p?'anti-horário':'horário'}"><i style="background:${COL[f]||'#9b5cff'};outline:1px solid #0003"></i>${f}${p?'′':''}<small>${NAMES[f]}</small></button>`)).join('');
+mvEl.addEventListener('click',e=>{const b=e.target.closest('button');if(b)enqueue(b.dataset.f,b.dataset.p==='1',{user:true});});
+
+function inverseAll(){const inv=hist.slice().reverse();hist=[];inv.forEach(h=>enqueue(h.f,!h.prime,{fast:true,rec:false}));return inv.length;}
+document.getElementById('bScr').onclick=()=>{
+  if(cur||queue.length)return;
+  let last='';for(let i=0;i<22;i++){let f;do f='UDRLFB'[Math.floor(Math.random()*6)];while(f===last);last=f;enqueue(f,Math.random()<.5,{fast:true});}
+  scrambled=true;timing=false;elapsed=0;msg('Embaralhado com 22 giros aleatórios. O cronômetro começa no seu primeiro movimento.');};
+document.getElementById('bSol').onclick=()=>{
+  if(cur||queue.length)return;
+  if(!hist.length){msg('Já está no estado inicial: nada a desfazer.');return;}
+  const n=inverseAll();timing=false;msg(`Aplicando ${n} matrizes inversas na ordem contrária: (M₁·M₂·…·Mₙ)⁻¹ = Mₙ⁻¹·…·M₁⁻¹.`);};
+document.getElementById('bUndo').onclick=()=>{if(cur||queue.length||!hist.length)return;const h=hist.pop();enqueue(h.f,!h.prime,{rec:false});};
+document.getElementById('bReset').onclick=()=>{queue=[];cur=null;build();hist=[];count=0;scrambled=false;timing=false;elapsed=0;stats();msg('Cubo reiniciado.');};
+document.getElementById('bDemo').onclick=()=>{
+  if(cur||queue.length)return;
+  if(!solved()){msg('Comece com o cubo resolvido (use Reiniciar) para ver a demonstração.');return;}
+  for(let i=0;i<105;i++){enqueue('R',false,{fast:true});enqueue('U',false,{fast:true});}
+  msg('Aplicando (R·U) 105 vezes. A matriz de permutação da sequência tem ordem 105: (R·U)¹⁰⁵ = I, e o cubo volta sozinho ao estado resolvido.');};
+addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT')return;
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();document.getElementById('bUndo').click();return;}
+  let k=e.key.toUpperCase();if(!MOVES[k])k=e.key.toLowerCase();if(MOVES[k]&&!e.ctrlKey&&!e.metaKey&&!e.altKey)enqueue(k,e.shiftKey,{user:true});});
+
+/* ---------- Conceitos ---------- */
+const cards=[
+ ['Vetores','var(--blue)','Cada peça é um vetor','p = (x, y, z),  x, y, z ∈ {−1, 0, 1}','As 26 peças visíveis ocupam as posições inteiras de um cubo 3×3×3 centrado na origem. Os cantos de cada adesivo também são vetores.'],
+ ['Matrizes de rotação','var(--red)','Girar uma face = multiplicar matrizes','p′ = R · p','Um giro de 90° usa cos 90° = 0 e sen 90° = ±1, então R só tem 0, 1 e −1. Por isso a posição continua exata depois de milhares de giros.'],
+ ['Composição','var(--green)','Vários giros = produto de matrizes','O′ = R · O','Cada peça guarda uma matriz de orientação O. Fazer R depois U equivale a multiplicar U·R. A ordem importa: R·U ≠ U·R (teste no cubo!).'],
+ ['Inversa e transposta','#ff5800','Desfazer é usar a inversa','R⁻¹ = Rᵀ   e   (AB)⁻¹ = B⁻¹A⁻¹','Matrizes de rotação são ortogonais, então a inversa é a transposta. O botão Resolver aplica as inversas de todo o histórico na ordem contrária.'],
+ ['Determinante','var(--blue)','Rotação não deforma nem espelha','det(R) = 1','Determinante 1 significa que o volume é preservado e que a orientação não é invertida. Uma reflexão teria det = −1 e trocaria as cores de lado.'],
+ ['Produto escalar','var(--red)','Quais faces aparecem na tela?','n · (câmera − centro) > 0','Para cada adesivo calculamos o produto escalar entre a normal da face e o vetor até a câmera. Se for negativo, a face está de costas e não é desenhada.'],
+ ['Mudança de base','var(--green)','Girar a câmera é girar o mundo','V = Rx(φ) · Ry(θ)','Arrastar o mouse muda os ângulos θ e φ. Toda coordenada é multiplicada por V antes de ir para a tela — a matriz ao lado muda ao vivo.'],
+ ['Projeção','#ff5800','Do 3D para a tela 2D','x_tela = f · x / (d − z)','A projeção perspectiva divide pela distância até a câmera: o que está longe fica menor. Durante a animação, o ângulo vai de 0° a 90° com a mesma R(θ).'],
+];
+document.getElementById('cards').innerHTML=cards.map(c=>`<div class="card"><span class="tag" style="background:${c[1]};color:#000">${c[0]}</span><h3 style="margin-top:8px">${c[2]}</h3><div class="f">${c[3]}</div><p>${c[4]}</p></div>`).join('');
+
+stats();requestAnimationFrame(frame);
+}
+</script>
+<script>G.tutorial('cubo');</script>
+</body>
+</html>

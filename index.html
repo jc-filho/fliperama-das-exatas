@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fliperama das Exatas</title>
+<link rel="stylesheet" href="comum.css">
+<style>
+/* VOICE: tela de seleção de fliperama, alegre e direta
+   IDEA: cada jogo é um gabinete de arcade com o seu personagem em pixel art e o HI-SCORE
+   PICTURE: letreiro neon piscando e uma grade de gabinetes coloridos por matéria
+   COLOUR and TYPE: neon (amarelo, rosa, ciano, verde) sobre roxo-noite; Press Start 2P
+   LAYOUT: letreiro, filtros das matérias, grade de jogos, próximas matérias */
+.letreiro{text-align:center;padding:10px 0 4px}
+.letreiro h1{font-size:clamp(22px,4.6vw,46px);margin:0;color:var(--yel);text-shadow:4px 4px 0 #000,0 0 26px rgba(255,210,63,.6),0 0 60px rgba(255,79,216,.35)}
+.letreiro .sub{font:clamp(10px,1.4vw,13px)/1.8 var(--pixel);color:var(--pink);margin-top:12px}
+.moeda{font:12px var(--pixel);color:var(--blue);margin:18px 0 6px;text-align:center;animation:pisca 1.1s steps(2) infinite}
+@keyframes pisca{50%{opacity:0}}
+@media(prefers-reduced-motion:reduce){.moeda{animation:none}}
+.filtros{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:16px 0 22px}
+.filtros button{font:10px/1.4 var(--pixel);padding:8px 12px}
+.filtros button.on{background:var(--yel);color:#000;border-color:#000}
+.grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,255px),1fr));gap:18px}
+.gab{display:flex;flex-direction:column;text-decoration:none;color:var(--ink);background:var(--card);border:3px solid var(--line);border-radius:6px;box-shadow:6px 6px 0 #000;overflow:hidden;transition:transform .12s}
+.gab:hover{transform:translate(-2px,-4px);border-color:var(--c);box-shadow:8px 10px 0 #000,0 0 24px var(--c)}
+.gab .tela{height:140px;display:grid;place-items:center;background:radial-gradient(circle,#211a55,#07061a 75%);border-bottom:3px solid var(--c);position:relative}
+.gab .tela::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.2) 0 1px,transparent 1px 3px)}
+.gab svg{width:96px;height:96px;image-rendering:pixelated}
+.gab .txt{padding:12px 14px 14px;display:flex;flex-direction:column;gap:6px;flex:1}
+.gab h2{font-size:13px;line-height:1.5;margin:0;color:var(--c)}
+.gab p{margin:0;color:var(--mut);font-size:15px;line-height:1.45}
+.gab .rod{margin-top:auto;padding-top:8px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.gab .jogar{font:10px var(--pixel);color:#000;background:var(--c);padding:7px 10px;border:2px solid #000}
+.gab .hi{font:9px/1.5 var(--pixel);color:var(--yel)}
+.breve{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px}
+.breve div{border:3px dashed var(--line);border-radius:4px;padding:12px 14px}.breve b{display:block;font:11px/1.6 var(--pixel);color:var(--mut)}
+@media(prefers-reduced-motion:reduce){.gab{transition:none}.gab:hover{transform:none}}
+</style>
+</head>
+<body>
+<div class="stripe"><i style="background:var(--red)"></i><i style="background:var(--org)"></i><i style="background:var(--yel)"></i><i style="background:var(--green)"></i><i style="background:var(--blue)"></i><i style="background:var(--pink)"></i></div>
+<section class="band">
+  <div class="letreiro">
+    <h1>FLIPERAMA<br>DAS EXATAS</h1>
+    <div class="sub">8 jogos · 5 matérias · todos com tutorial</div>
+  </div>
+  <p class="moeda">▶ ESCOLHA SEU JOGO ◀</p>
+  <div class="filtros" id="filtros" role="group" aria-label="Filtrar por matéria"></div>
+  <div class="grade" id="grade"></div>
+  <section style="margin-top:40px"><h2 style="color:var(--mut)">Em breve</h2>
+    <div class="breve">
+      <div><b>LÓGICA</b><span class="small">Tabela-verdade, implicação e equivalência</span></div>
+      <div><b>GEOMETRIA ANALÍTICA</b><span class="small">Vetores no plano e distância entre pontos</span></div>
+      <div><b>ALGORITMOS</b><span class="small">Ordenação e busca passo a passo</span></div>
+    </div>
+  </section>
+  <p class="small" style="margin-top:28px;text-align:center">Projeto de Gabriel Lenardy · Engenharia de Software</p>
+</section>
+<script>
+{
+const mmss=ms=>{const s=Math.floor(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
+const pts=v=>v+' PTS';
+const MAT={algebra:['Álgebra Linear','#ff4d6d'],funcoes:['Funções','#39c2ff'],limites:['Limites','#39ff88'],derivadas:['Derivadas','#ff4fd8'],integrais:['Integrais','#ffd23f']};
+/* Ícones em pixel art (mesmos personagens dos jogos) */
+const ICON={
+  cubo:[['rrwwbb','rrwwbb','ggyyoo','ggyyoo','bbrrww','bbrrww'],{r:'#ff4d6d',w:'#f4f1ff',b:'#39c2ff',g:'#39ff88',y:'#ffd23f',o:'#ff8a3d'}],
+  funcoes:[['....y....','....y....','...yyy...','yyyywyyyy','.yyyyyyy.','..yyyyy..','..yy.yy..','.yy...yy.','.y.....y.'],{y:'#ffd23f',w:'#fff'}],
+  ponte:[['..hhhh..','.hhhhhh.','hhhhhhhh','..ssss..','..skks..','..ssss..','.gggggg.','.gggggg.','..bbbb..','..b..b..','.bb..bb.'],{h:'#8b5a2b',s:'#ffcf9e',k:'#000',g:'#3d8b5a',b:'#6a5acd'}],
+  nave:[['..oo.......','.oyyo......','oyyyyooo...','oyccyyyyoo.','oyccyyyyyyo','oyyyyyyyyo.','oyyyyooo...','.oyyo......','..oo.......'],{o:'#ff8a3d',y:'#ffd23f',c:'#39c2ff'}],
+  catapulta:[['..gggggg..','.gGGGGGGg.','gGGwkGwkGg','gGGwkGwkGg','gGGGGGGGGg','gGGGrrGGGg','gGGGGGGGGg','.gggggggg.'],{g:'#1aa35a',G:'#39ff88',w:'#fff',k:'#000',r:'#ff4d6d'}],
+  skatista:[['...hh...','..hssh..','...ss...','.bbbbbb.','b.bbbb.b','..bbbb..','..p..p..','..p..p..','pppppppp','.w....w.'],{h:'#ffd23f',s:'#ffcf9e',b:'#39c2ff',p:'#ff4fd8',w:'#fff'}],
+  tanque:[['...ww...','...ww...','...gg...','..g..g..','.g....g.','g.pppp.g','gppppppg','gppppppg','.gppppg.','..gggg..'],{w:'#8b5a2b',g:'#d6d2ff',p:'#ff4fd8'}],
+  corrida:[['....hh....','...hssh...','.ccccccccc','cccccccccc','kk.cccc.kk','kk......kk'],{h:'#ffd23f',s:'#ffcf9e',c:'#ff4d6d',k:'#111'}],
+};
+const svg=([rows,pal])=>{const w=rows[0].length,h=rows.length;let r='';rows.forEach((l,j)=>[...l].forEach((k,i)=>{if(pal[k])r+=`<rect x="${i}" y="${j}" width="1.02" height="1.02" fill="${pal[k]}"/>`;}));
+  return`<svg viewBox="${-1} ${-1} ${Math.max(w,h)+2} ${Math.max(w,h)+2}" aria-hidden="true">${r}</svg>`;};
+const JOGOS=[
+  ['cubo','algebra','Cubo Mágico: Speedrun','Gire e resolva o cubo 3D. Cada giro é uma matriz de rotação.','exatas-cubo',mmss],
+  ['funcoes','funcoes','Caça-Estrelas','Ajuste os parâmetros até o gráfico acender todas as estrelas.','exatas-funcoes',null],
+  ['ponte','limites','Ponte sobre a Lava','Coloque a tábua na altura do limite e salve o explorador.','exatas-ponte',pts],
+  ['nave','limites','Nave da Assíntota','Pilote no túnel do gráfico e encare as assíntotas.','exatas-nave',pts],
+  ['catapulta','derivadas','Cerco das Derivadas','Bola de fogo contra o castelo: o topo do voo é onde y′ = 0.','exatas-catapulta',v=>v+' ★'],
+  ['skatista','derivadas','Skate Neon','Manobras nos topos e vales da pista, onde f′ = 0.','exatas-skatista',pts],
+  ['tanque','integrais','Poção Exata','Encha o frasco na medida certa calculando a área sob a vazão.','exatas-tanque',pts],
+  ['corrida','integrais','Kart das Áreas','Aposte no kart com mais área sob o gráfico da velocidade.','exatas-corrida',pts],
+];
+const ler=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
+function hi(k,f){const r=ler(k);if(r===null)return'';if(k==='exatas-funcoes'){try{return JSON.parse(r).txt;}catch(e){return'';}}return f?f(+r):r;}
+let filtro='todos';
+function render(){
+  document.getElementById('filtros').innerHTML=[['todos','Todos','#ffd23f'],...Object.entries(MAT).map(([k,[n,c]])=>[k,n,c])].map(([k,n,c])=>`<button data-f="${k}" class="${filtro===k?'on':''}" style="${filtro===k?'':`color:${c}`}">${n}</button>`).join('');
+  document.getElementById('grade').innerHTML=JOGOS.filter(j=>filtro==='todos'||j[1]===filtro).map(([arq,m,tit,desc,k,f])=>{const[nm,c]=MAT[m],h=hi(k,f);
+    return`<a class="gab" href="${arq}.html" style="--c:${c}"><div class="tela">${svg(ICON[arq])}</div><div class="txt"><span class="tag" style="background:${c};align-self:flex-start">${nm}</span><h2>${tit}</h2><p>${desc}</p><div class="rod"><span class="jogar">JOGAR ▶</span><span class="hi">${h?'HI '+h:''}</span></div></div></a>`;}).join('');
+}
+document.getElementById('filtros').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;filtro=b.dataset.f;render();});
+render();
+}
+</script>
+</body>
+</html>
